@@ -562,8 +562,9 @@ Input and the read layer:
   shape a scan can read, the document refusals, the record facts, the CLI argument rules, and the
   offline run that calls no producer
 - `tests/test_input_shapes.py` - the input shape table read as data: the one row shape, the table module stating no
-  rule an owner states, each held refusal row measured through the owner its row names, the accepted rows through the
-  shared read rule, and the pending rows stating no line
+  rule an owner states, each held refusal row measured through the owner its row names, the one held console line row
+  measured through the block its owner states with the prefix read through `container_coverage`, the accepted rows
+  through the shared read rule, and the pending rows stating no line
 - `tests/test_parse_helpers.py` - the six value readers call the read layer's whitespace rule, and an absent
   element answers `None`
 

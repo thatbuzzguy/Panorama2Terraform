@@ -536,13 +536,14 @@ def test_the_console_line_shape_is_stated_in_one_place():
     assert sorted(name for name, text in texts.items() if "container_coverage.console_line(" in text) == [
         "entry_coverage.py",
         "shadow_coverage.py",
+        "split_device_groups.py",
     ], "the shape is the only line builder"
     for name in ("ownership.py", "reference_edges.py", "state_coverage.py"):
         assert "def console_line" not in texts[name] and "def console_lines" not in texts[name], (
             name,
             "the report-only scans state no console wording",
         )
-    for name in ("entry_coverage.py", "shadow_coverage.py"):
+    for name in ("entry_coverage.py", "shadow_coverage.py", "split_device_groups.py"):
         assert "def console_line(" not in texts[name], (name, "the block states the fact, not the shape")
 
 

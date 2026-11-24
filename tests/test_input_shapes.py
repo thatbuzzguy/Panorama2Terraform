@@ -8,13 +8,16 @@ restates no row (`docs/INPUT_SHAPES.md` §3). These pins measure the table in fo
 - the module states no rule an owner states, so the table is a mirror and not a second definition;
 - every held refusal row is measured through the owner function the row names, and the line the entry point prints
   for its content is the wording the row states, which is what stops a mirror drifting from its owner;
+- the one held row that states a console line is measured through the block its owner states, read with the prefix
+  through the module that owns the shape, because a console line row is the fact an entry point read rather than a
+  refusal;
 - every accepted row answers no refusal when the shared read rule reads its content, and every pending row reads no
   owner today, so the table prints nothing for it.
 
 The pins decide each shape from the row's bytes and not from a file name, and no row names a file name or a fixture.
-The pins call `xml_input.check_bytes`, `xml_input.read_input`, `xml_input.parse_bytes` and `state_input.parse_state`
-through each row's own `measured_through`, so this module holds no second size check, no second DTD rule, and no
-second reader.
+The pins call `xml_input.check_bytes`, `xml_input.read_input`, `xml_input.parse_bytes`, `state_input.parse_state` and
+`split_device_groups.console_lines` through each row's own `measured_through`, so this module holds no second size
+check, no second DTD rule, no second reader, and no second console line.
 """
 
 import ast
@@ -29,13 +32,14 @@ import input_shapes
 import naming
 import panorama_to_terraform
 import source_fetch
+import split_device_groups
 import state_input
 import xml_input
 from conftest import FIXTURES_DIR, SRC_DIR, input_refusal, run_script
 
 # The owners the rows name. A row names its owner as a function, the pins resolve the name and call it, so the pins
 # hold no reader of their own.
-OWNERS = {"xml_input": xml_input, "state_input": state_input}
+OWNERS = {"xml_input": xml_input, "state_input": state_input, "split_device_groups": split_device_groups}
 
 # The limit the size pins measure against, which is under every row's content, so the size half of a refusal reads
 # as a plain byte count and the pins can compare the numbers a line prints. A row states the origin and the byte
@@ -69,6 +73,18 @@ def _row(name: str) -> dict:
     rows = [row for row in input_shapes.SHAPE_TABLE if row["shape"] == name]
     assert len(rows) == 1, (name, "the table states each shape once")
     return rows[0]
+
+
+def _refusal_rows() -> list[dict]:
+    """The held rows that state a line and name `none` as their entry point, which rule 6 states as the refusal
+    rows, so the pins read a refusal through the door and nothing else."""
+    return [row for row in _rows(input_shapes.STATUS_HELD, states_line=True) if row["entry_point"] == "none"]
+
+
+def _console_rows() -> list[dict]:
+    """The held rows that state a line through an entry point that accepts the shape, so the line is the fact that
+    entry point read rather than a refusal."""
+    return [row for row in _rows(input_shapes.STATUS_HELD, states_line=True) if row["entry_point"] != "none"]
 
 
 def _owner(row: dict):
@@ -160,9 +176,12 @@ def test_the_table_is_data_with_one_row_shape():
     assert not [row for row in rows if row["status"] == input_shapes.STATUS_PENDING and row["printed_line"]], (
         "a pending row states no line"
     )
-    assert len(_rows(input_shapes.STATUS_HELD, states_line=True)) == 10, "the pins measure every held refusal row"
+    held_lines = _rows(input_shapes.STATUS_HELD, states_line=True)
+    assert len(held_lines) == 11, "the pins measure every held row that states a line"
+    assert len(_refusal_rows()) == 10, "the pins measure every held refusal row through its owner"
+    assert len(_console_rows()) == 1, "the pins measure the held console line row through its owner"
     assert len(_rows(input_shapes.STATUS_HELD, states_line=False)) == 5, "the pins measure every accepted row"
-    assert len(_rows(input_shapes.STATUS_PENDING)) == 4, "the pins read the pending rows as pending"
+    assert len(_rows(input_shapes.STATUS_PENDING)) == 3, "the pins read the pending rows as pending"
 
 
 def test_the_pins_define_no_row_shape_and_no_row_of_their_own():
@@ -245,7 +264,7 @@ def test_the_dtd_row_is_measured_by_the_parser_and_not_by_a_text_search(tmp_path
     assert _printed(error) == _line(row, path), (error, "the parser reads the prolog in any encoding")
 
 
-@pytest.mark.parametrize("row", _rows(input_shapes.STATUS_HELD, states_line=True))
+@pytest.mark.parametrize("row", _refusal_rows())
 def test_a_held_refusal_row_prints_the_line_its_owner_states(row, tmp_path):
     """Criterion 3: the pins run the row's content through the row's own owner, print the answer through the entry
     point's own print site, and hold that the line is the row's wording with only the measured parts filled in. The
@@ -284,6 +303,37 @@ def test_an_accepted_row_answers_no_refusal_through_the_shared_read_rule(row, tm
         assert input_refusal(path) is None, (row["shape"], "the shared read rule accepts it")
 
 
+@pytest.mark.parametrize("row", _console_rows())
+def test_a_held_console_row_prints_the_fact_through_the_block_its_owner_states(row, tmp_path):
+    """Criterion 3, the console half: the pin runs the row's content through the block the row's owner states and
+    compares the printed line with the row. An entry point accepts this shape, so the answer is not a refusal and the
+    pins read no door here, and the row states no placeholder, so the pin compares the whole line. The row holds no
+    prefix, because the prefix is the part `container_coverage` states, so the pin reads the prefix through that
+    owner, and the line's parts are the three the shape holds: the source line, the path the tree holds the entry at,
+    and the fact. The pins read each part through the owner that states it, so the pins hold no part of their own.
+    """
+    path = tmp_path / "input"
+    path.write_bytes(row["content"])
+    refused = input_refusal(path)
+    assert refused is None, (row["shape"], "the shared read rule accepts this shape, so the line is not a refusal")
+    source = xml_input.parse_bytes(row["content"], _origin(path))
+    read = split_device_groups.parse_device_groups(source)
+    shape = split_device_groups.tree_shape(source)
+    block = _owner(row)(source, read)
+    assert not read, (row["shape"], "the fact is the row count the run read")
+    assert len(block) == 2, (block, "the block prints its header and the line")
+    prefix = container_coverage.CONSOLE_PREFIX
+    assert prefix not in row["printed_line"], (row["shape"], "the table holds no copy of the shape")
+    line = block[1]
+    assert line == prefix + row["printed_line"], (row["shape"], "the printed line is the row's wording")
+    parts = line[len(prefix) :].split("  ")
+    assert parts == [
+        container_coverage.position_part(shape["line"]),
+        shape["path"],
+        split_device_groups.row_fact(len(read)),
+    ], (parts, "the line names the three parts the shape holds")
+
+
 @pytest.mark.parametrize("row", _rows(input_shapes.STATUS_PENDING))
 def test_a_pending_row_states_no_line_and_names_the_decision_it_waits_for(row, tmp_path):
     """Criterion 5: a pending row states no line, names the decision or the piece it waits for, names no entry point
@@ -307,10 +357,11 @@ def test_a_pending_row_states_no_line_and_names_the_decision_it_waits_for(row, t
 
 
 def test_the_pending_rows_are_the_open_decisions():
-    """Criterion 5, read as a set: the pending rows name the two open §2 decisions and the splitter diagnostic piece,
-    so a decision that lands moves a row in the same commit, and no pending row holds a line."""
+    """Criterion 5, read as a set: the pending rows name the two open §2 decisions, so a decision that lands moves a
+    row in the same commit, and no pending row holds a line. The splitter row is held now, because the run prints the
+    line Piece 13A.2 wrote for it."""
     pending = {row["pending_on"] for row in input_shapes.SHAPE_TABLE if row["status"] == input_shapes.STATUS_PENDING}
-    assert pending == {"Piece 13A.2", "§2 decision 4", "§2 decision 5"}, pending
+    assert pending == {"§2 decision 4", "§2 decision 5"}, pending
     for row in input_shapes.SHAPE_TABLE:
         assert not (row["status"] == input_shapes.STATUS_PENDING and row["printed_line"]), (row["shape"], "both")
 

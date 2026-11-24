@@ -295,6 +295,28 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   broken, because no `src/` module names it; the finding is that the name has no owner the test can read. Owner:
   `docs/CODEBASE_ASSEMBLY.md` §11.
 
+- **The console-line shape pin holds a list of the modules that call the shape, and the owner document holds a list of
+  the kinds that print, with nothing tying the two.** Measured 2026-11-24 during Piece 13A.2:
+  `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place` names the three modules that
+  call `container_coverage.console_line` (`entry_coverage.py`, `shadow_coverage.py`, `split_device_groups.py`), and
+  `docs/ARCHITECTURE.md` §3.2 names the five kinds that print. A module that starts calling the shape has to be added
+  to both lists in the same commit by hand, so a module can call the shape without being named as a kind that prints.
+  Owners: `container_coverage.console_line`, `docs/ARCHITECTURE.md` §3.2.
+- **A console line row is measured through the block its entry point states, so its fact phrase is held as data in the
+  row.** Measured 2026-11-24: the splitter row's line is the wording `split_device_groups.row_fact` builds, so that
+  function cannot reword it without moving the row in the same commit, and the pin reads the row's three parts through
+  three owners (`container_coverage.position_part`, the `line` and `path` fields of the module's own row rule `_row`,
+  and `row_fact`), so the pin depends on the module's row shape as well as on the line. The row holds no prefix, so
+  the pin reads the prefix through `container_coverage.CONSOLE_PREFIX`. Owners: `src/input_shapes.py`,
+  `src/split_device_groups.py`.
+- **The honest statement for a part a run cannot name is held in the module and not in the table.** Measured
+  2026-11-24: each row is measured through one content, and the content that shows a shape also shows the parts the
+  line names for it, so a row that shows no entry names the shape the row rule answers, not the shape a run prints for
+  an absent identity. The module states its own wording for the tree that holds no entry at any path, and the position
+  part for a finding with no line is `container_coverage.position_part`. A document that states either wording is
+  prose, which check 7 reads, so neither is recorded as a row. Owners: `src/split_device_groups.py`,
+  `container_coverage.position_part`.
+
 ## Out of Scope
 
 - The orchestrator is not this tool's job. The tool writes data an orchestrator reads: the unit

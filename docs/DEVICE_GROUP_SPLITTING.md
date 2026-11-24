@@ -131,8 +131,9 @@ Processing device group: DG-Guest
 The names the run prints for a group are the source names, because the run prints what the
 row holds; the file name is the §5 shape of that name.
 
-A single-firewall export has no device groups, so the splitter reports that and
-exits non-zero. Convert such an export directly.
+A firewall export holds no device-group row, so the run prints the fact it read — the row count, the shape the tree
+holds instead, and the source line — through the console-line owner, and exits non-zero. Convert such an export
+directly.
 
 ## Batch conversion
 
@@ -149,11 +150,12 @@ done
 
 | Symptom | Cause and action |
 |---|---|
-| "No device groups found" | The export came from a firewall, not Panorama, which is the firewall export row of [`../src/input_shapes.py`](../src/input_shapes.py). Run the converter on it directly. |
+| The run states zero `device-group/entry` rows | The export came from a firewall, not Panorama, which is the firewall export row of [`../src/input_shapes.py`](../src/input_shapes.py). Run the converter on it directly. |
 | "two device group names read one file name" | Two source names read the same §5 shape, so they name one file. Rename one of them in the export. The run writes nothing, because the number it would have to pick depends on the entry order. |
 | No template copied | No device appears in both the device group and the template. Check both device lists. If Panorama really does not link them, add the device to the template, or copy the template section by hand. |
 | Shared objects missing from a split file | The source had no `shared` section. A split file copies the shared section only when the export has one. |
 
-The shape the splitter read is a row of [`../src/input_shapes.py`](../src/input_shapes.py), and the table states no
-line for the splitter today: the line that names the row set the splitter read is pending Piece 13A.2
-([INPUT_SHAPES.md](INPUT_SHAPES.md) §3 and §4).
+The shape the splitter read is a row of [`../src/input_shapes.py`](../src/input_shapes.py), and that row now states
+the line the run prints for it: the row count, the shape the tree holds instead, and the source line, printed through
+`container_coverage.console_line` ([INPUT_SHAPES.md](INPUT_SHAPES.md) §3 and §4). The troubleshooting rows name the
+shape and hold no row wording, so the table stays one definition.

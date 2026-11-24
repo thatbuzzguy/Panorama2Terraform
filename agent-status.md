@@ -1,66 +1,82 @@
 # Agent Status
 
-## Current position (main, Piece 13A.1, 2026-11-24)
+## Current position (main, Piece 13A.2, 2026-11-24)
 
-Piece 13A.1 is complete on main, 2026-11-24, and is not pushed. It is the input shape table of
-`docs/INPUT_SHAPES.md`, the first piece of Epic 13: the table is one machine-readable table with one owner module
-in `src/`, so a document links to it instead of restating a row. The commit holds the table module, the pins that
-read it, the document edits, and the tracking markdown. The piece record for Piece 11C.3 (Epic 11, the write
-boundary, which is complete) is held by the git history at `1fdf5b7`.
+Piece 13A.2 is complete on main, 2026-11-24, and is not pushed. It is the splitter diagnostic, the
+second piece of Epic 13: the run prints the fact it read for the shape it read, through the console-line owner,
+instead of the line that guessed where the export came from. The commit holds the print site, the pins that read the
+printed set, the shape table row that moved, the document edits, and the tracking markdown. The piece record for
+Piece 13A.1 (the shape table, complete) is held by the git history at `a2df38e`.
 
 What landed:
 
-- `src/input_shapes.py`, the owner module: `SHAPE_ROW_FIELDS` (the seven fields `shape`, `content`, `entry_point`,
-  `printed_line`, `status`, `pending_on`, `measured_through`), `STATUS_HELD`, `STATUS_PENDING`, and `SHAPE_TABLE` as
-  pure literal data, 19 rows (15 held, 4 pending). The module states no check, no reader, no parser, no writer, no
-  console line, no naming rule, no environment name and no control-character set, so every line in a row is the
-  wording of the module that builds it. A pending row names no owner and states no line, because its rule has no
-  owner yet: the two open `docs/INPUT_SHAPES.md` §2 decisions and the splitter line Piece 13A.2 has to write.
-- `tests/test_input_shapes.py`, the 28 pins that read the table as data: the row shape, the status vocabulary, the
-  table read through `ast` so no row is a build, the pins defining no row, each held refusal row measured through
-  the owner its `measured_through` names, the accepted rows through `tests/conftest.py::input_refusal`, the pending
-  rows, the measured placeholder set, and the two entry points printing the same line for a row through two
-  subprocess runs. A row that states a number as wording is a finding, because the pins read the placeholders.
-- `tools/check_documents.py` gained check 7, the shape table: the owner document names the owner module, and no
-  markdown restates a row. It reads a word window, so its length is what separates a copy from prose that shares the
-  tool's vocabulary (four words inside a quotation or a code span, six words anywhere), and the `src/` scan for the
-  table reads it through `ast` like the other tables. The check is recorded in `tools/README.md`.
-- `docs/INPUT_SHAPES.md` moved from planning to rules: §3 names `src/input_shapes.py` and `SHAPE_ROW_FIELDS`, the
-  pins, the placeholder set and the status vocabulary; §1 item 1 links to the table instead of quoting parse wording.
-  The §2 decisions stay open.
-- The index rows: `docs/ARCHITECTURE.md` §1 names `input_shapes.py` and the rule it keeps, `README.md` §Testing
-  names the new test module, `docs/README.md` names it as a machine-readable table. The restated rows in `README.md`,
-  `docs/USAGE_GUIDE.md` §Troubleshooting, `docs/DEVICE_GROUP_SPLITTING.md` and `docs/README.md` are links now.
-  `docs/LICENSING.md` counts moved to 25 modules and 21 modules without a notice, because the new module is the 25th.
+- `src/split_device_groups.py`, the owner of the printed fact: head comment rule 6, `BLOCK_HEADER`, `NO_ENTRY_SHAPE`,
+  `row_fact`, `tree_shape` and `console_lines`. The run states its own fact phrase and its own block header, carries
+  the marker `container_coverage.CONSOLE_WARNING` for a block that has findings, and calls
+  `container_coverage.console_line`, so it builds no prefix and no second shape. The three parts the line names are
+  the row count the run read, the path the tree holds the entry at, and the source line the read layer records for
+  that entry. The entry is the first one the tree holds in source line order, read through the module's own row rule
+  (`_row`) and the walk rule it already states, so the printed line reads no rule the module does not already state.
+  A block prints only when it has a finding, so a run that read rows prints nothing new. A part the run cannot name
+  is the honest statement: `container_coverage.position_part` for a finding with no line, and `NO_ENTRY_SHAPE` for a
+  tree that holds no entry at any path. The exit code is unchanged, so a run that read no `device-group/entry` row
+  still exits 1, writes nothing, and a refusal still prints through the read layer's own print site.
+- `tests/test_split_device_groups.py`, 15 pins now (3 new): the printed fact measured through the owners that state
+  each part, the honest statement for a tree that holds no entry, and that a run which read its own table prints
+  nothing new and went on to write its files. The pins read the parts through `container_coverage.console_line`,
+  `container_coverage.position_part` and `split_device_groups.row_fact`, so the test module holds no wording of its
+  own, and one pin reads the exit code as unchanged.
+- `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place` names `split_device_groups.py`
+  in the list of modules that call the shape, and the loop that holds "the block states the fact, not the shape" reads
+  it as a module that states no `console_line` of its own.
+- `tests/test_input_shapes.py`, 28 pins: the held rows that state a line now split into the 10 refusal rows and the
+  one console line row, so the refusal pin reads only rows that name `none` as their entry point. The console row pin
+  runs the row's content through `split_device_groups.console_lines` and reads the prefix through
+  `container_coverage.CONSOLE_PREFIX`. `OWNERS` gained `split_device_groups`. The counts moved to 11 held rows that
+  state a line, 10 refusal rows, 1 console line row, 5 accepted rows and 3 pending rows, and the pending set is the
+  two open `docs/INPUT_SHAPES.md` §2 decisions.
+- `src/input_shapes.py`: the splitter row is held, `entry_point` is `split_device_groups.py`, `printed_line` is the
+  row's wording without the console prefix, and `measured_through` is `split_device_groups.console_lines`. Rule 3
+  states why the row holds no prefix, and rule 6 states the two kinds of held line row: a refusal row and the fact an
+  entry point read.
+- The documents: `docs/INPUT_SHAPES.md` §1 items 1 and 2, §3 rules 1, 2, 3 and 5, and §4, which names the pins.
+  `docs/DEVICE_GROUP_SPLITTING.md` and `docs/USAGE_GUIDE.md` §Troubleshooting name the shape and describe what the
+  run prints without quoting the line, which `tools/check_documents.py` check 7 reads. `README.md` §Testing names the
+  console line row and the splitter pins. `docs/ARCHITECTURE.md` §1 names the splitter's printed fact, and §3.2 names
+  five kinds that print, with the splitter pin among the pins. No document holds the row's printed line.
 
 Gate, measured 2026-11-24 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 112 files it reads (82 Python, 30 markdown),
-`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,829
-passed and the same 4 `tflint` skips, so 1,833 pins in 55 modules, in 301.4 s. The Piece 11C.3 baseline was 1,801
-passed in 54 modules, so the count moved by the 28 pins this piece adds. `tflint` is absent, so the 4 skips are the
-`tflint` pins in `tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran.
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,832
+passed and the same 4 `tflint` skips, so 1,836 pins in 55 modules, in 385.6 s. The Piece 13A.1 baseline was 1,829
+passed and 1,833 pins, so the count moved by the 3 pins this piece adds. `tflint` is absent, so the 4 skips are the
+`tflint` pins in `tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran. No new `src/`
+module, so the `docs/LICENSING.md` counts did not move: that document is the measurement at `ac7609e`, and check 3
+reads each file total at that commit, so an edit to `src/split_device_groups.py` cannot move a number there.
 
 Findings this piece reports:
 
-- Check 7 reads a word window, and four words is not enough: `identity key cannot` is part of a row's line and also
-  ordinary prose about the identity rule, which three documents state as prose. The recorded lengths are the guard,
-  not the intent, so a short quote of a row cannot be flagged. Recorded in `backlog.md`.
-- The shape table pins read the owners' wording, so `xml_input.py` or `state_input.py` cannot reword a refusal
-  without moving the rows in the same commit. Recorded in `backlog.md`.
-- The two license counts are read from the working tree, which `docs/LICENSING.md` says they are not, so the counts
-  moved with this piece by writing the document rather than by measuring it. Recorded in `backlog.md`.
+- The console-line shape pin holds a list of the modules that call the shape, so a module that starts calling
+  `container_coverage.console_line` has to be added to that list and to the list of kinds that print in
+  `docs/ARCHITECTURE.md` §3.2 in the same commit. Nothing pins that the two lists agree, so a module can call the
+  shape without being named as a kind that prints. Recorded in `backlog.md`.
+- A console line row is measured through the block its entry point states, so the fact phrase is held as data in the
+  row: `split_device_groups.row_fact` cannot reword its line without moving the row in the same commit, and the pin
+  reads the row's parts through three owners (`position_part`, the row's `line` and `path` fields, `row_fact`), so the
+  pin depends on the module's own row shape. Recorded in `backlog.md`.
+- The honest statement for a tree that holds no entry is the module's own wording, and no shape table row holds it,
+  because each row is measured through one content that shows one shape. Recorded in `backlog.md`.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `tools/README.md`, `docs/README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §1 and
-§3.2, `docs/USAGE_GUIDE.md` §Troubleshooting, `docs/DEVICE_GROUP_SPLITTING.md` §Troubleshooting,
-`docs/LICENSING.md`, `docs/IMPORT_BINDING.md` §2, `tests/test_layout.py`, `tests/conftest.py`,
-`tools/check_documents.py`, `src/input_shapes.py`, `src/xml_input.py`, `src/state_input.py`,
-`src/panorama_to_terraform.py`, `src/split_device_groups.py`, `tests/test_input_shapes.py`.
+`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/DEVICE_GROUP_SPLITTING.md`, `docs/USAGE_GUIDE.md`,
+`docs/ARCHITECTURE.md` §1 and §3.2, `docs/LICENSING.md`, `tools/check_documents.py`,
+`src/split_device_groups.py`, `src/input_shapes.py`, `src/container_coverage.py`, `tests/conftest.py`,
+`tests/test_split_device_groups.py`, `tests/test_input_shapes.py`, `tests/test_container_coverage.py`.
 
-The next piece is Piece 13A.2, the splitter diagnostic: its shape table row stays pending until the line is written,
-so the pins that read the printed set move in the same commit. The two open Epic 13 §2 decisions (the member
-selection for a bundle with more than one XML member, and the bytes the provenance record names for an archive read)
-are each a pending row. Piece 13A.4's 10.2 documentation leg redirects and stays open.
+The next piece is Piece 13A.3, the committed fixture pair, which the fixture-count pins read in the same commit; the
+shape table reads the shapes from bytes, so the pair adds no row. Then Piece 13A.4, the unfinished 10.2 documentation
+comparison leg. The two open Epic 13 §2 decisions (the member selection for a bundle with more than one XML member,
+and the bytes the provenance record names for an archive read) are each a pending row.
 
 ## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
 
@@ -138,7 +154,9 @@ side still need a manual join.
 - The input shape table is data with one owner module (`src/input_shapes.py`, `SHAPE_TABLE`), so a document links to
   it and restates no row, which `tools/check_documents.py` check 7 reads, and each held row is measured through the
   owner its `measured_through` names, so an owner that rewords a refusal moves the row in the same commit. A pending
-  row states no line and names no owner until its decision is taken, so no pin measures a line for it.
+  row states no line and names no owner until its decision is taken, so no pin measures a line for it. A row whose
+  line is a console line holds no prefix, because the prefix is the part `container_coverage` states, so the pin reads
+  the prefix through that owner.
 - `state_coverage.ownership_key` is the one identity key rule, so the shadow scan, the ownership order and the
   state scan read their keys through it and no module states a second key. The key names the parent scope for a
   shadow, so the report line names which parent entry the child repeats, and the parent entry stays in the
@@ -147,7 +165,8 @@ side still need a manual join.
   §3.2), so a scan states its fact phrase and its block header and calls it. A finding kind that prints on
   the console must fit the four parts: one position, one identity, one fact. A source named on a console
   line is the source name, never the path, and a fact that compares two entries or two units prints in the
-  report only.
+  report only. The five kinds that print are the container coverage finding, the gap entry, the property
+  finding, the shadow line, and the splitter line, which names the fact its own row set read.
 - The captured part of a report line is stated in one place, `entry_coverage.captured_part`, so `entry_line` and
   `gap_fact` print the same words for the same finding. `PRINTS_VALUE_KINDS` names which kinds print a value, and
   it must stay data: no writer branch may decide the shape per kind. `NAMES_NO_FIELD_KINDS` is the matching data set
@@ -233,13 +252,13 @@ side still need a manual join.
   a `[` value and each element as an entry, which is the certificate profile's `certificate` row.
   `_parse_router` builds the `protocol` dict from the fields the `protocol` row states, and
   `parse_filter_containers` builds each entry dict from the fields its own row states, so the level names are the
-  table's names in both. Field order is the table order, so the order a row states is the order the block
-  prints, and a row change that moves the order moves the goldens. A level that holds no entry has no container
-  row, so the property scan measures nothing for it and the matrix row stays grounded by the table. An entry
-  inside an entry is not in the scan scope unless a row names the path with the `entry` segment the parent entry
-  is: the certificate profile's list objects are that case, because the field the profile row names is also the
-  spelling of the `certificate` section row, so the row that holds the `entry` segment wins by length and the
-  profile row measures them. Every other entry inside an entry is grounded by the table instead.
+  table's names in both. Field order is the table order, so the order a row states is the order the block prints,
+  and a row change that moves the order moves the goldens. A level that holds no entry has no container row, so the
+  property scan measures nothing for it and the matrix row stays grounded by the table. An entry inside an entry is
+  not in the scan scope unless a row names the path with the `entry` segment the parent entry is: the certificate
+  profile's list objects are that case, because the field the profile row names is also the spelling of the
+  `certificate` section row, so the row that holds the `entry` segment wins by length and the profile row measures
+  them. Every other entry inside an entry is grounded by the table instead.
   `_protocol_areas` is the area rule the two OSPF levels share, `_protocol_branch` walks the segments between a
   level dict and an entry level, `_protocol_entries` fills a `string_list` level, `_protocol_entry_level` fills
   an entry level the row states as a field, because its entries live under the element the field names, and
@@ -321,10 +340,10 @@ side still need a manual join.
 - One place answers a destination: `entry_coverage.EntryLedger.destination`, in the order the per-entry fact on
   the recorded object, the destination `mark` recorded, the container table row. `mark` states no destination of
   its own, so a call site that states `destination='report'` for a report-only entry restates a fact the entry
-  already holds. The fact is read through `RecordingDict.value()`, so the decision records no property use and
-  the order of `mark` and the field cannot change the answer; `mark_skipped` records no object, so a skipped
-  entry answers through the mark. The cross-check counts only `emitted` rows, so an entry the run reports enters
-  no count.
+  already holds. The fact is read through `RecordingDict.value()`, so the decision records no property use and the
+  order of `mark` and the field cannot change the answer; `mark_skipped` records no object, so a skipped entry
+  answers through the mark. The cross-check counts only `emitted` rows, so an entry the run reports enters no
+  count.
 - A coverage fact that comes from a run must be read from the run's ledger, so the scan tests run the pipeline
   in process. The round-trip cross-check reads the run's ledger as an argument, so its pins run the pipeline in
   process too, and a `run_checks` call that passes no ledger reports the check as NOT RUN rather than guessing a
@@ -332,12 +351,13 @@ side still need a manual join.
 - A cycle test needs two units that each declare a name the other one uses, because the rule resolves a name
   only inside the unit that declared it (`tests/fixtures/reference_cycle.xml`).
 - The splitter (`src/split_device_groups.py`) reads the rules its owners state and defines none of its own: the
-  single writer for the bytes of a split file, `naming.py` §5 for the file name, and the source line as the
-  identity of an entry for its three tables. It owns its own output path, so it names no builder from
-  `write_path.py`, and the writer scan reads the element-writer shape so no module can add a writer of its own.
-  A file name two entries read to is a refusal, not a numbering, because a numbering depends on the order the
-  entries appear in (§6). The shared merge dedupes the pair (path, name) at the level the path names, so an
-  entry stays at its own path and one name at two depths is two entries.
+  single writer for the bytes of a split file, `naming.py` §5 for the file name, the source line as the
+  identity of an entry for its three tables, and `container_coverage.console_line` for the shape of the fact its own
+  row set read. It owns its own output path, so it names no builder from `write_path.py`, and the writer scan reads
+  the element-writer shape so no module can add a writer of its own. A file name two entries read to is a refusal,
+  not a numbering, because a numbering depends on the order the entries appear in (§6). The shared merge dedupes the
+  pair (path, name) at the level the path names, so an entry stays at its own path and one name at two depths is two
+  entries. A block prints only when it has a finding, so a run that read rows prints no diagnostic line.
 - The LF rule is a byte rule, so the goldens and the no-change tests change with the write path. The rule is in
   the one write function, and `docs/ARCHITECTURE.md` §6 states it.
 - Path 2 adds `api_requests.py` and `api_to_terraform.py`, and both are read by the pins that scan the `src/`
@@ -373,9 +393,9 @@ the Current position above; the measurements below were taken on the tree before
 
 Epic 14, the blocks a run binds to the live config, is planned in the `import-pairing` worktree on branch
 `import-pairing`, based on main `c845f07`. The design record is `docs/IMPORT_BINDING.md`, the pieces are in
-`to-do.md`, the criteria are in `acceptance.md`, and the live facts are in `backlog.md`. No decision is taken, so
-no piece can be written from one yet, and no `src/` file is touched until a piece lands. The shared tracking
-markdown needs a manual join against main at merge.
+`to-do.md`, the criteria are in `acceptance.md`, and the facts that need a live target are in `backlog.md`. No
+decision is taken, so no piece can be written from one yet, and no `src/` file is touched until a piece lands. The
+shared tracking markdown needs a manual join against main at merge.
 
 What the record states, measured offline: the binding decision is run-wide and reaches no record, so a later run
 cannot read it back and no gate rule can name a unit that should have written blocks; the address half is already

@@ -41,6 +41,10 @@ Four rules the splitter reads from their owners, and one it states itself:
 5. The extraction answers through the row it was given, so it states no lookup of its own and can answer no
    absent value. The warning the old code stated for an absent answer is gone with the lookup, because the row
    names an entry the read layer saw.
+6. The run prints the fact it read for the shape it read: the row count, the shape the tree holds instead, and the
+   source line the read layer records for the entry that shows the shape. It states its own fact phrase and its own
+   block header and calls `container_coverage.console_line`, so it builds no console shape of its own, and the row
+   rule and the walk rule it already states are the only rules the printed line reads (`docs/INPUT_SHAPES.md` §4).
 
 Usage:
     from split_device_groups import device_associations, parse_device_groups, split_file_names
@@ -56,6 +60,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import container_coverage
 import naming
 from write_path import LF, write_file
 from xml_input import (
@@ -88,6 +93,63 @@ def parse_device_groups(source: ParsedSource) -> list:
     """The device group rows, in source line order (§6: the order the input states is preserved on purpose)."""
     table = device_associations(source)["device_groups"]
     return [table[line] for line in sorted(table)]
+
+
+# The wording the block states for the fact it read, and the honest statement for the part the run cannot name.
+# The shape itself is `container_coverage.console_line`, so the block calls it and holds no prefix.
+BLOCK_HEADER = "Splitter row set"
+NO_ENTRY_SHAPE = "no entry at any path"
+
+
+def row_fact(count: int) -> str:
+    """The fact part of the line: the row count the run read, and the shape the tree holds instead."""
+    return f"{count} device-group/entry rows read, so the tree holds the shape named instead"
+
+
+def tree_shape(source: ParsedSource) -> dict | None:
+    """The row for the first entry the tree holds, read through the row rule and the walk rule this module states.
+
+    The module's own tables answer nothing for the firewall export shape, so the fact the run can state is what the
+    tree holds instead: the entry at the level the path names. The walk is the rule `merge_shared` states for that
+    level, so this function adds no lookup rule of its own, and the row is the shape `_row` defines, which is the
+    line the fact prints the parts from.
+    """
+
+    def walk(node: ET.Element, path: str) -> dict | None:
+        for child in node:
+            if child.tag == "entry":
+                # The tables answer for a named entry only (§2.3), so an entry with no name shows no shape.
+                if read_text(child.get("name")):
+                    return _row(child, source, path)
+                continue
+            found = walk(child, f"{path}/{child.tag}" if path else child.tag)
+            if found:
+                return found
+        return None
+
+    return walk(source.root, "")
+
+
+def console_lines(source: ParsedSource, rows: list) -> list:
+    """The block for the shape the run read: the header, then one console line in the shape the owner states.
+
+    Empty when the run read rows, so a run that reads its own table prints nothing new. The three parts the line
+    names are the row count, the shape the tree holds instead, and the source line, and the run states the position
+    through `container_coverage.position_part`, which is the honest statement for a finding with no line. The block
+    has a fact, so the header carries the marker the owner states for a block that has findings.
+    """
+    if rows:
+        return []
+    shape = tree_shape(source)
+    return [
+        f"{container_coverage.CONSOLE_WARNING}  {BLOCK_HEADER}",
+        container_coverage.console_line(
+            "",
+            container_coverage.position_part(shape["line"] if shape else 0),
+            shape["path"] if shape else NO_ENTRY_SHAPE,
+            row_fact(len(rows)),
+        ),
+    ]
 
 
 def _device_names(entry: ET.Element) -> list:
@@ -285,9 +347,9 @@ def split_panorama_config(input_file: str, output_dir: str = None, max_input_byt
 
     rows = parse_device_groups(source)
 
-    if not rows:
-        print("No device groups found in Panorama configuration.")
-        print("This may be a single firewall export, not a Panorama export.")
+    block = console_lines(source, rows)
+    if block:
+        print("\n".join(block))
         return False
 
     # Every file name is read before anything is written, so a pair that names one file stops the run with no

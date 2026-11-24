@@ -12,6 +12,8 @@ Four rules, each stated by its owner and read by the splitter:
    keyed by the source line the read layer records (F4.2), and the join answers the devices of the entry that
    lists them.
 4. The shared merge dedupes the pair (path, name) at its own level and keeps each entry at the path it sits at.
+5. The printed fact reads the run's own row set and the path an entry sits at, and the line shape comes from
+   `container_coverage.console_line`, so the splitter states no console line of its own.
 
 Pins:
 
@@ -22,7 +24,10 @@ Pins:
   their own devices, and the join answers its rows in source line order;
 - the merge keeps a nested entry at its own path and dedupes the pair (path, name) at its own level, the tree
   holds one container per path, and a section that states no entry writes no container;
-- the extraction answers through the row it was given, and states no lookup, no absent answer and no warning.
+- the extraction answers through the row it was given, and states no lookup, no absent answer and no warning;
+- the run prints the three parts of the fact it read for a file with no device-group row, through the
+  console-line owner, and prints nothing new when its table answers; a part the run cannot name is the honest
+  statement.
 
 The scan pin for the last rule is there for the reason `acceptance.md` states: a branch that cannot fire cannot
 be shown by a run.
@@ -33,6 +38,7 @@ from pathlib import Path
 
 import pytest
 
+import container_coverage
 import naming
 import split_device_groups
 import xml_input
@@ -384,3 +390,85 @@ def test_the_extraction_answers_through_the_row_it_was_given(tmp_path):
         held = tree.find(".//device-group/entry")
         assert held.get("name") == row["name"], row
         assert held is not row["entry"], "the split tree is independent of the source"
+
+
+# --- 6. The fact the run prints for the shape it read ---------------------------
+
+
+# Content that shows the shape the fact reads: a device entry with no device-group row. The entry sits at the
+# path `devices`, on the line the pins count from the content.
+FIREWALL_SHAPE = (
+    '<?xml version="1.0"?>\n<config>\n  <devices>\n    <entry name="0123456789"/>\n  </devices>\n</config>\n'
+)
+
+# The same shape with nothing for the walk to hold, so the line can only state the honest parts.
+NO_ENTRY = '<?xml version="1.0"?>\n<config/>\n'
+
+
+def test_the_splitter_prints_the_fact_it_read_for_a_file_with_no_device_group_row(tmp_path):
+    """The run prints the three parts through the console-line owner: the row count, the path the tree holds
+    instead, and the source line. Before the change the run printed a guess about where the export came from,
+    which named none of the three parts. The exit code stays with the rules that read the files
+    (`docs/ARCHITECTURE.md` §4.6), so this run still exits 1 and writes nothing.
+    """
+    source = _file(tmp_path, "firewall.xml", FIREWALL_SHAPE)
+    out = tmp_path / "out_fact"
+    result = run_script("split_device_groups.py", str(source), "--output-dir", str(out))
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert not out.exists(), f"the run made {out} for a shape its tables answer nothing for"
+
+    # The parts are read through the owners that state them, so the pin restates no wording of its own: the
+    # position is the read layer's line, the identity is the path the entry sits at, and the fact is the count.
+    parsed = xml_input.parse_xml(source)
+    rows = split_device_groups.parse_device_groups(parsed)
+    shape = split_device_groups.tree_shape(parsed)
+    assert not rows, "the run read no row for this shape, which is the fact the line states"
+    assert shape["line"] == 4 and shape["path"] == "devices", (shape, "the content shows the parts the line names")
+    printed = result.stdout.splitlines()
+    assert printed == [
+        f"{container_coverage.CONSOLE_WARNING}  {split_device_groups.BLOCK_HEADER}",
+        container_coverage.console_line(
+            "",
+            container_coverage.position_part(shape["line"]),
+            shape["path"],
+            split_device_groups.row_fact(len(rows)),
+        ),
+    ], printed
+
+
+def test_the_run_prints_nothing_new_when_its_table_answers(tmp_path):
+    """A block prints only when it has a finding, so a run that read rows prints no diagnostic line and goes on to
+    write its files.
+    """
+    parsed = xml_input.parse_xml(_file(tmp_path, "rows.xml", NESTED_MERGE))
+    rows = split_device_groups.parse_device_groups(parsed)
+    assert rows, "the content shows the shape the run reads"
+    assert split_device_groups.console_lines(parsed, rows) == [], "the run states no fact for a shape it read"
+    out = _split(tmp_path, NESTED_MERGE, "out_no_fact")
+    assert sorted(p.name for p in out.glob("*.xml")) == [_file_name("DG-Merge")], "the run wrote the row it read"
+
+
+def test_the_line_names_the_honest_statement_when_the_tree_holds_no_entry(tmp_path):
+    """A part the run cannot name is the honest statement, not a guess: the position part is
+    `container_coverage.position_part` for a finding with no line, and the identity part is the module's own
+    statement for a tree that holds no entry at any path. The exit code is the same as the run above.
+    """
+    source = _file(tmp_path, "no_entry.xml", NO_ENTRY)
+    parsed = xml_input.parse_xml(source)
+    rows = split_device_groups.parse_device_groups(parsed)
+    assert split_device_groups.tree_shape(parsed) is None, "the tree holds no entry to name"
+    block = split_device_groups.console_lines(parsed, rows)
+    assert block[1] == container_coverage.console_line(
+        "",
+        container_coverage.position_part(0),
+        split_device_groups.NO_ENTRY_SHAPE,
+        split_device_groups.row_fact(len(rows)),
+    ), block
+    result = run_script(
+        "split_device_groups.py",
+        str(source),
+        "--output-dir",
+        str(tmp_path / "out_honest"),
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout.splitlines() == block, result.stdout

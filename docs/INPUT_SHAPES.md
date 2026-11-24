@@ -12,14 +12,14 @@ refused or read. The document index is in [README.md](README.md). The read rule 
 1. No producer decompresses anything. `src/xml_input.py` states no archive rule, and
    `read_input` hands raw bytes to the door, so archive magic bytes reach `reject_dtd`, the
    prolog scan cannot read them, and the parse answers the line the shape table states for the
-   magic-bytes row (`src/input_shapes.py`). The splitter's firewall message is therefore only
+   magic-bytes row (`src/input_shapes.py`). The splitter's line for the shape it read is therefore only
    reached when the bytes already are XML: a bundle member read after extraction, or a per-device
    export.
 2. The splitter answers through `device_associations`, so the fact it can state is the row set
-   it read: zero `device-group/entry` rows, and the shape the tree holds instead. The current
-   line "This may be a single firewall export, not a Panorama export." states a guess, not the
-   fact, and does not fit the four parts of the console-line rule
-   (`container_coverage.console_line`, `docs/ARCHITECTURE.md` §3.2).
+   it read: zero `device-group/entry` rows, and the shape the tree holds instead, which is the path the entry sits
+   at. Piece 13A.2 wrote the line for that fact, so the run prints the fact through
+   `container_coverage.console_line` and names no file, because the run wrote none. The line that guessed where the
+   export came from is gone with the piece.
 3. The two config shapes are already read and pinned by tests: the Panorama export holds
    `device-group` entries plus `templates` and `template_stacks`, and a firewall's own export
    holds `devices/entry/<serial>` — or `localhost.localdomain` — with no device-group row. Both
@@ -66,31 +66,44 @@ which `tools/check_documents.py` reports. Every document that describes a shape 
 
 1. **The module states no rule an owner states**, so each line is the measured wording of the module that builds
    it: the size line from `xml_input.check_bytes` and `xml_input.read_input`, the DTD line from
-   `xml_input.check_bytes`, the parse line from `xml_input.parse_bytes`, and the state line from `state_input.parse_state`.
-   A row names its owner in `measured_through`, and `tests/test_input_shapes.py` measures the row by running the row's
-   content through that owner and comparing the printed line with the row. A pending row names no owner, because the
-   rule it waits for has no owner yet.
+   `xml_input.check_bytes`, the parse line from `xml_input.parse_bytes`, the state line from
+   `state_input.parse_state`, and the console line from `container_coverage.console_line` with the fact phrase and the
+   block header of the entry point that read the fact. A row names its owner in `measured_through`, and
+   `tests/test_input_shapes.py` measures the row by running the row's content through that owner and comparing the
+   printed line with the row. A pending row names no owner, because the rule it waits for has no owner yet. A console
+   line row holds no prefix, because the prefix is the part `container_coverage` states, so the pin reads the prefix
+   through that owner and holds that the table holds no copy of the shape.
 2. **The parts of a line the pins measure are the origin and the byte counts**, held as `{origin}`, `{size}` and
-   `{limit}`. Every other part of a line is the row's own wording, so the pin compares the whole line, and a row that
-   states a number as wording cannot be measured.
+   `{limit}`. Every other part of a line is the row's own wording, so the pin compares the whole line. A part the
+   row's own content shows — the DTD name, a parse answer, the position and the identity a console line names — is
+   wording measured by running the content through the owner, so no row states a number the pins cannot read from it.
 3. **The status vocabulary is two words.** `held` is a row the pins measure today; `pending` is a row whose line does
    not exist yet, and a pending row states no line, names no entry point as accepting its shape, and names the
-   decision in §2 or the piece in `to-do.md` it waits for. A decision that lands moves the row in the same commit.
+   decision in §2 it waits for. A decision that lands, or a line that is written for a held shape, moves the row in
+   the same commit.
 4. **The shape is read from the bytes**, so no row names a file name, an extension, or a committed fixture, and the
    pins decide acceptance from the row's content under different names. The committed fixture pair is Piece 13A.3,
    which adds no row here, so the fixture-count pins do not move.
 5. **Every entry point prints the same line for the same bytes**, which the pins measure by running both entry points
    on one row's content. A row that names `none` as its accepted entry point is a refusal row: the entry point prints
-   the refusal, and the line is that refusal.
+   the refusal, and the line is that refusal. A row that names an entry point is a shape that entry point accepts, so
+   the line is the fact it read, and the pins read that row through the block the entry point states rather than
+   through a refusal.
 
-## 4. The diagnostic rule
+## 4. The diagnostic rule (rules, Piece 13A.2, 2026-11-24)
 
-The splitter prints the fact the run reads: the number of `device-group/entry` rows, the shape
-the tree holds instead, and the source line of the entry that shows it. The finding must fit the
-four parts of the console-line rule — one position, one identity, one fact — or print in the
-report only, because a fact that compares the read row set against the expected row set
-compares two sets. The exit code does not change: the exit code stays with the rules that read
-the files (`docs/ARCHITECTURE.md` §4.6).
+The splitter prints the fact the run reads: the number of `device-group/entry` rows, the shape the tree holds
+instead, and the source line of the entry that shows it. The fact names one position, one identity and one fact, so it
+prints through `container_coverage.console_line`; the report branch is for a fact that compares two sets, and this fact
+compares a count with one shape, and the splitter writes no report. The run states its own fact phrase and its own
+block header and calls the shape, so it holds no shape of its own, and the row rule and the walk rule it already
+states are the only rules the line reads. A part the run cannot name is the honest statement, and a block prints only
+when it has a finding. The exit code does not change: the exit code stays with the rules that read the files
+(`docs/ARCHITECTURE.md` §4.6). Pinned by
+`tests/test_split_device_groups.py::test_the_splitter_prints_the_fact_it_read_for_a_file_with_no_device_group_row`,
+`tests/test_split_device_groups.py::test_the_line_names_the_honest_statement_when_the_tree_holds_no_entry`,
+`tests/test_split_device_groups.py::test_the_run_prints_nothing_new_when_its_table_answers`, and
+`tests/test_input_shapes.py::test_a_held_console_row_prints_the_fact_through_the_block_its_owner_states`.
 
 ## 5. Facts only a live target states
 

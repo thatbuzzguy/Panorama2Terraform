@@ -624,7 +624,7 @@ Four things explain the shape of the output:
 | Duplicate local resource names | A true duplicate of the same identity. The generator adds a numeric suffix so the output stays valid HCL. Two different identities never need it. |
 | `terraform validate` reports an unknown `location` sub-block | The gate checks presence only, not shape. Read `LOCATION_SCHEMA` in `resource_mapping.py`; `terraform validate` accepts an unknown sub-block and drops it silently. |
 | Apply fails with "not found" | The referenced object exists in another tenant, so the converter left the name as a plain string. Create it, or point the provider at the right device group. |
-| Splitter prints "No device groups found" | The export came from a firewall, not Panorama. Run the converter on it directly. |
+| Splitter states zero `device-group/entry` rows | The export came from a firewall, not Panorama, which is the firewall export row of [`../src/input_shapes.py`](../src/input_shapes.py). The run prints the fact it read and exits non-zero. Run the converter on it directly. |
 | Splitter copies no template | No device appears in both the device group and the template. The splitter prints the fact. Fix the export, or copy the template section by hand. |
 
 ## Extending the converter
