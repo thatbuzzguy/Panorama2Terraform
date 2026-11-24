@@ -2,8 +2,8 @@
 
 Converts a Palo Alto Panorama XML configuration export into Terraform
 configuration for the **Palo Alto Networks panos provider v2** (pinned to
-`~> 2.0.14`), plus plain-text migration reports for the configuration
-that has no v2 resource.
+`~> 2.0.15`, the version `tests/conftest.py::declared_provider` reads from a committed golden `provider.tf`), plus
+plain-text migration reports for the configuration that has no v2 resource.
 
 ## What it does
 
@@ -81,7 +81,8 @@ entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ## Requirements
 
 - Python 3.10+ (standard library only)
-- Terraform 1.14+ for the validate gate (an `action` block is 1.14 syntax)
+- Terraform 1.16 or later for the validate gate, the value `src/commit_actions.py::TERRAFORM_MINIMUM` states and the
+  generated `terraform` block declares. An `action` block is 1.14 syntax, which is the level the language needs.
 - A Panorama XML export
 
 ## Generated resources (provider v2)
@@ -150,9 +151,9 @@ resource "panos_address" "web_server_1_11f477f4" {
 Provider v2 places every resource with the required `location` argument,
 and the sub-blocks one type accepts differ from the next. The converter
 takes the choice from the source scope the export declares and from
-[`LOCATION_SCHEMA`](src/resource_mapping.py), the verified v2.0.14 shape per
-emitted type. The branch order is in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.2:
+[`LOCATION_SCHEMA`](src/resource_mapping.py), the shape measured against provider 2.0.14 per emitted type; the
+schema answers the same for the pinned provider, so the shape holds for it (`docs/CODEBASE_ASSEMBLY.md` §12). The
+branch order is in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4.2:
 
 | Source of the entry | Emitted location |
 |---|---|

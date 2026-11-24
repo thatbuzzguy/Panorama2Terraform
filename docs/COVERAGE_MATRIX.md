@@ -302,8 +302,8 @@ per-row pipeline test, row shape, and property grounding.
 - **Provider schema source.** The panos provider's resource schemas
   come from `terraform providers schema -json`, run by
   `terraform init` against the exact source + version declared in the
-  golden `provider.tf` (currently
-  `PaloAltoNetworks/panos ~> 2.0.14`). There is no Python package for
+  golden `provider.tf`, the version the pins read through
+  `tests/conftest.py::declared_provider` (`PaloAltoNetworks/panos ~> 2.0.15`). There is no Python package for
   the schema; the conformance tests consume this JSON.
 - **Schema conformance.** `tests/test_resource_mapping.py` checks that
   every `EMITTED_TYPES` type exists in the provider schema and that

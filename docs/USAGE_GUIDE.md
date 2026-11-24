@@ -10,8 +10,8 @@ and what each output file holds. The rules behind the output are in
 
 The converter reads a Panorama XML configuration export and writes Terraform
 configuration for the `PaloAltoNetworks/panos` provider v2 (pinned
-`~> 2.0.14`). It also writes reports for configuration that has no v2
-resource, so nothing is dropped silently.
+`~> 2.0.15`, the version `tests/conftest.py::declared_provider` reads from a committed golden `provider.tf`). It
+also writes reports for configuration that has no v2 resource, so nothing is dropped silently.
 
 The tool is a local file converter. By default it connects to no server, runs no
 command, and needs no credentials. Reading from the Panorama API is an explicit
@@ -21,9 +21,9 @@ key and connects to no server.
 ## Requirements
 
 - Python 3.10 or later. Standard library only.
-- Terraform 1.14 or later, only for the optional `--validate` check. An `action`
-  block is 1.14 syntax, so the generated `terraform` block declares 1.14 as the
-  minimum.
+- Terraform 1.16 or later, the value `src/commit_actions.py::TERRAFORM_MINIMUM` states, and only for the optional
+  `--validate` check. An `action` block is 1.14 syntax, which is the level the language needs, so the generated
+  `terraform` block declares the project minimum and not the grammar level.
 - tflint, only for the optional `--tflint` check. The tool imports only the standard library, so tflint is an
   external command the gate runs, the way it runs terraform. The Terraform Language ruleset is bundled with the
   binary, so the rule set needs no `--init` and no plugin install. The measured facts the pins hold were measured

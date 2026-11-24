@@ -180,9 +180,13 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   stated in 11 markdown documents, 6 `src/` modules, the 17 golden `provider.tf` files and `tests/tflint/probe.tf`;
   the Terraform minimum is stated in 8 markdown documents, 4 `src/` modules, the 17 golden `provider.tf` files and
   the 6 golden `actions.tf` files. So a pin move is a change to about 40 files, and the one-owner rule is satisfied
-  in `src/` and not in the documents. A decision is needed: either the documents link to the pin owner and state no
-  version, or the fan-out is accepted and the piece list names the files it reaches. Measured 2026-11-23 after
-  Piece 12A.2: the minimum is now stated as a value in `src/` only at its owner, and the three `src/` statements
+  in `src/` and not in the documents. The decision was taken by Piece 12A.3 on 2026-11-23: a document names the owner
+  it reads the value through and states the version only as the pin itself or as the measurement it made, so the
+  fan-out is accepted and the piece list names the files it reaches. Measured on the tree that holds Piece 12A.3: 11
+  markdown documents state a provider version, of which 6 state the pin itself (`README.md`, `docs/USAGE_GUIDE.md`,
+  `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`, `docs/CODEBASE_ASSEMBLY.md`, `docs/ARCHITECTURE.md` §6), and
+  8 state a Terraform version. Measured 2026-11-23 after Piece 12A.2: the minimum is now stated as a value in `src/`
+  only at its owner, and the three `src/` statements
   that still read 1.14 are the grammar measurements (`src/sanity_checks.py`, `src/import_blocks.py`, the grammar
   clause of the head comment in `src/panorama_to_terraform.py`). The provider version is still stated as a literal
   at the print site in `src/panorama_to_terraform.py`, because its owner is `tests/conftest.py::declared_provider`
@@ -203,6 +207,12 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   rule are read only when someone runs the script by hand. It reads only the standard library, writes no file, and
   runs in 8.4 s, so one CI step could run it. Not open as a pin: the rule that a wording check is not a pin still
   holds either way.
+- **The CI-line gate rule needs a binary this machine does not have.** `agent-status.md` states the gate is measured
+  on the CI line, and the CI job pins Terraform 1.16.7 while this machine has 1.16.2, so a gate number on the CI line
+  needs a downloaded binary held outside the repository. Measured 2026-11-23 with a 1.16.7 binary in
+  `/tmp/opencode/tf1167` (taken from the release and checked against the published SHA256SUMS): the provider-schema
+  pins answer the same bytes as on 1.16.2, so no recorded number differs between the two lines. The rule is satisfiable
+  only where the CI version is installed, so every recorded gate number has to name the binary that answered it.
 - **Two license counts are read from the working tree, which the document says they are not.**
   `docs/LICENSING.md` line 30 states the counts are read at the commit the document names and not from the working
   tree, and the license checks read `git blame` and `git show` at that commit. The notice count and the module count

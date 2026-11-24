@@ -7,10 +7,11 @@ Panorama XML element feeds each emitted type, and the fixture that
 proves it — is in [`COVERAGE_MATRIX.md`](./COVERAGE_MATRIX.md). The document
 index is in [README.md](README.md).
 
-Verified against **provider v2.0.14** (128 resource types) via
-`terraform providers schema -json` (the registry's latest 2.x release).
-The conformance test and the `terraform validate` gate run against this
-version.
+Measured against **provider 2.0.14** (128 resource types) via
+`terraform providers schema -json`, and the pinned provider is `~> 2.0.15` (the registry's latest 2.x release, read
+through `tests/conftest.py::declared_provider`), whose schema is the same as the measured one
+(`docs/CODEBASE_ASSEMBLY.md` §12), so the measurements in this document hold for it. The conformance test and the
+`terraform validate` gate run against the pinned provider.
 
 ## Status summary
 
@@ -205,8 +206,8 @@ detailed configuration that is not captured.
 
 ## Verification
 
-`tests/test_resource_mapping.py` asserts, against the live v2.0.14
-schema:
+`tests/test_resource_mapping.py` asserts, against the live schema for the pinned provider, the version
+`tests/conftest.py::declared_provider` reads from a committed golden `provider.tf`:
 
 1. the emitted-type set is exactly the types the committed goldens emit;
 2. every emitted type exists in the provider schema;

@@ -590,7 +590,8 @@ neither section.
 Drift compares only a property the matrix row declares. The state name a property is read under comes
 from `state_coverage.STATE_PROPERTY_NAMES`, the one mapping rule, and a row exists only where the two
 names differ, so a property the table has no row for is compared by the name both sides hold. The rows
-are a measurement, made 2026-11-21 per matrix row type against the pinned provider schema (v2.0.14), and
+are a measurement, made 2026-11-21 per matrix row type against the provider schema for provider 2.0.14, the pin
+then, and
 not a selection: the run is read on the row's own fixture, the field names printed at the block's own
 level are read through the gate's one field reader, and a pair is kept when the printed name is an
 attribute the schema declares at the block's top level for that type, when the printed value is the same

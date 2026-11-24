@@ -6,8 +6,8 @@ documents hold it. The items that need a fact a live target states are in `backl
 ## Epic 11 — the codebase several runs write into
 
 The design record is `docs/MULTI_RUN_CODEBASE.md`; each rule there names the pins that hold, and a rule whose pin
-is pending says so. Acceptance criteria for the open piece are in `acceptance.md`, which after the merge holds the
-Epic 12 criteria and the measurements the two pin decisions rest on.
+is pending says so. The acceptance criteria for an open piece are written in `acceptance.md` when the piece starts;
+that file now holds the Piece 12A.3 record and the pointers to the Epic 13 and Epic 14 records.
 
 ### Phase 11C, the update run
 
@@ -16,22 +16,6 @@ Epic 12 criteria and the measurements the two pin decisions rest on.
 
 The move fact, the stale-file boundary, the selection for a `vsys` or a device unit, and the `--prune-cache`
 consequence are in `backlog.md`.
-
-## Epic 12 — the pins (plan in `PLAN.md`, criteria in `acceptance.md`)
-
-Planned in the `pin-update` worktree, merged into main 2026-11-23, and the pieces run on main. The two decisions
-are in `PLAN.md`: the floor is `>= 1.16` with CI at 1.16.7, and the minimum has one owner,
-`src/commit_actions.py::TERRAFORM_MINIMUM`, read by the pins through `tests/conftest.py::declared_terraform_minimum`.
-The provider pin has `~> 2.0.15`. The pieces that landed are not recorded here; the git history holds them.
-
-- **12A.3** — the statements that name the pinned provider: `README.md`, `docs/USAGE_GUIDE.md`,
-  `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`, and `docs/CODEBASE_ASSEMBLY.md` §12. §12 is the one place
-  that states why the 2.0.14 measurements hold for 2.0.15, so the dated measurements stay as they were measured and
-  one sentence names the schema identity. The gate is re-measured on the CI line, because the recorded measurements
-  name Terraform 1.16.2 while CI will run 1.16.7.
-
-The ruff half is in `backlog.md`: the newer version reports one finding the pinned version does not, so that pin
-moves with its own change or not at all.
 
 ## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
 

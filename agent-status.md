@@ -1,84 +1,79 @@
 # Agent Status
 
-## Current position (main, Piece 12A.2, 2026-11-23)
+## Current position (main, Piece 12A.3, 2026-11-23)
 
-Piece 12A.2 is complete on main, 2026-11-23, and is not pushed. It moves the owner value and the committed bytes in
-one commit, as `acceptance.md` requires, so no pin sees a disagreement between the template and the goldens.
+Piece 12A.3 is complete on main, 2026-11-23, and is not pushed. It closes Epic 12: the documents that state a pin
+state it through its owner, and `docs/CODEBASE_ASSEMBLY.md` §12 states the schema identity that makes the 2.0.14
+measurements hold for the pinned provider. The Epic 12 piece list is removed from `to-do.md` and the Epic 12 planning
+section from `PLAN.md`; the git history holds them.
 
 What landed:
 
-- The owner, `src/commit_actions.py::TERRAFORM_MINIMUM`, reads the value Epic 12 decision 1 takes. It is the one
-  place the codebase states the Terraform minimum.
-- The print sites read the value through the owner, so they state no copy of it: the `terraform` block and the
-  generated `README.md` line in `src/panorama_to_terraform.py`, and the header of `actions.tf` in
-  `commit_actions.render`. The grammar clause of the head comment still names the level the action shape needs,
-  which is a measurement of the language and not the project minimum.
-- The head comment in `src/panorama_to_terraform.py` names the provider baseline as a value, because the provider
-  pin's owner is `tests/conftest.py::declared_provider`, which reads it from a committed golden `provider.tf`, and
-  `src/` reads nothing under `tests/`. The pins that read the provider schema read the version through that helper,
-  so no test asserts a version string: `git grep` over `tests/` for an assertion that compares a provider version
-  or a minimum answers nothing, and the version strings in the test modules are dated measurements.
-- The committed bytes: the 17 golden `provider.tf` files (the head comment baseline, the `required_version` line,
-  and the provider version line), the 6 golden `actions.tf` header lines, and `tests/tflint/probe.tf` (its
-  `required_version` and its panos version line). `tests/tflint/probe.json` is unchanged: the 8 committed findings
-  sit at probe.tf lines 8, 15, 24, 25, 26, 27, 30 and 38, none at the two lines the probe edit changes, and no rule
-  in the set reads a `required_version` or a provider version string. The pin that re-measures the answer against
-  the binary skipped, because tflint is absent here.
-- `.github/workflows/python-tests.yml`: `terraform_version` moves to the CI version Epic 12 decision 1 takes, and
-  the comment there says the workflow is the one place that states it.
-- `requirements.txt` names no version belonging to this piece (pytest 9.1.1 and ruff 0.16.10 only), so nothing was
-  changed in it; the finding is recorded in `backlog.md`, and the ruff pin stays there.
-- The stale minimum line in this file, which `backlog.md` recorded as the second live statement of the minimum, is
-  closed: the rules section now states the value through the owner.
+- `README.md`: the pinned provider statement names `~> 2.0.15` through `tests/conftest.py::declared_provider`; the
+  requirement line states the minimum through `src/commit_actions.py::TERRAFORM_MINIMUM`; the location section names
+  the `LOCATION_SCHEMA` shape as what was measured against 2.0.14 and links to §12 for the identity. A search of the
+  document for a version statement answers these three places and nothing else.
+- `docs/USAGE_GUIDE.md`: the same two statements, through the same two owners.
+- `docs/RESOURCE_MAPPING.md`: the pin statement names the owner and links to §12, so the provider measurements in the
+  body hold for the pinned provider without being restated to a different version, and the Verification section reads
+  the live schema for the pinned provider instead of naming 2.0.14.
+- `docs/COVERAGE_MATRIX.md`: the version the golden `provider.tf` declares is named through
+  `tests/conftest.py::declared_provider`.
+- `docs/CODEBASE_ASSEMBLY.md`: line 9 names the pinned provider through its owner; §12 states the schema identity and
+  names both measurements; the §10 sentence that states what the committed goldens declare now reads through the
+  minimum's owner, which closes the second live statement of the minimum.
+- `docs/ARCHITECTURE.md`: the drift-row sentence named the measured 2.0.14 as the pinned provider schema, which was
+  the pin on 2026-11-21. The sweep finds one live statement of the pin in that document, so the sentence now names it
+  as the pin then and the other 2.0.14 statements in the document stay as dated measurements.
+- This file: this record and the CI rule that states which version a document may name.
+- The grammar level stays as measured in `src/sanity_checks.py`, `src/import_blocks.py`, the grammar clause of the
+  head comment in `src/panorama_to_terraform.py`, and §12: 1.14 is the level the action shape needs. No live
+  statement of the project minimum reads 1.14, in the documents or in this file.
 
-Measurements taken 2026-11-23:
+Measurements taken 2026-11-23, single-threaded:
 
-- Before the goldens moved, `python3 -m pytest tests/test_golden_files.py` answered 23 failed and 68 passed, which
-  is exactly the 17 `provider.tf` pins and the 6 `actions.tf` pins, so the disagreement between the owner and the
-  committed bytes was the 23 files this piece moves.
-- The schema identity was re-measured on this tree: `terraform providers schema -json` answers byte for byte the
-  same for provider 2.0.14 and 2.0.15, 2,146,401 bytes, md5 `b7d5dcfbe72207e90c09e38fcbed2747`. The size and hash
-  recorded in `PLAN.md` on 2026-11-22 (2,146,209 bytes, `dfab791bae568bdd5ccdc69ca066a5b4`) cannot be reproduced
-  from the whole document on this run; the identity the decision rests on holds.
-- The provider cache serves 2.0.15: `terraform init` resolved and installed `paloaltonetworks/panos` v2.0.15 in
-  1.9 s, which also shows the constraint picks 2.0.15 as the newest 2.0.x, so the head comment's statement that the
-  baseline is the latest 2.x release still holds. `terraform` is present at 1.16.2, the version the recorded
-  measurements name, so the schema pins ran on this machine; CI runs the version its own file states.
-
-Gate, measured 2026-11-23 single-threaded on the tree that holds this work, including this file: `ruff check .` clean
-at `py310`, `ruff format --check .` clean on the 110 files it reads (81 Python, 29 markdown),
-`python3 tools/check_documents.py` reports no finding in 7.0 s, `python3 -m pytest` in one process with no parallel
-plugin exits 0 with 1,796 passed and the same 4 `tflint` skips, so 1,800 pins in 54 modules, in 257.5 s, which is the
-Piece 12A.1 baseline count: no pin count moved, because no pin reads a version as a literal. The runs on the same
-code before this rewrite answered the same counts in 256.5 s, 253.1 s, 313.0 s and 248.5 s. Read with `-rs`, the 4
-skips are the `tflint` pins in `tests/test_sanity_gate.py` at lines 720, 814, 912 and 981, and they skip for the
-missing binary; `terraform` is present, so the provider-schema pins ran against the pinned provider.
+- The schema identity, recorded in §12: `terraform providers schema -json` answers byte for byte the same for 2.0.14
+  and 2.0.15, 2,146,401 bytes, md5 `b7d5dcfbe72207e90c09e38fcbed2747`, on Terraform 1.16.2 and on the CI line
+  1.16.7. The figures `PLAN.md` recorded on 2026-11-22 (2,146,209 bytes, md5
+  `dfab791bae568bdd5ccdc69ca066a5b4`) cannot be reproduced from the whole document on this run, so §12 names the
+  comparison and not the figure.
+- The binary on this machine is Terraform 1.16.2, so the CI line was measured through a 1.16.7 binary held in
+  `/tmp/opencode/tf1167`, taken from the release and checked against the published SHA256SUMS
+  (`5454efcf7fc87f0c2113111b9a5c7182f0ca1c6f0f23a1e110a50770a8fe473b`). The binary is outside the repository, and no
+  document states a measurement made on it except the schema identity, which both binaries answer the same.
+- Gate, measured single-threaded on the final tree that holds this work, including this file, with Terraform 1.16.7
+  on the path: `ruff check .` clean at `py310`, `ruff format --check .` clean on the 110 files it reads (81 Python,
+  29 markdown), `python3 tools/check_documents.py` reports no finding in 7.7 s, and `python3 -m pytest` in one process
+  with no parallel plugin exits 0 with 1,796 passed and the same 4 `tflint` skips, so 1,800 pins in 54 modules, in
+  310.1 s, which is the Piece 12A.2 baseline count: no pin count moved, because no pin reads a version as a literal
+  and no test changed. Read with `-rs`, the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py` at lines 720,
+  814, 912 and 981, and they skip for the missing binary; the provider-schema pins ran against the pinned provider on
+  the CI line, which the run measured as the same bytes as on this machine’s 1.16.2. The pytest run measured
+  the tree that holds the document edits; the two wording changes written after it are in this file and in
+  `acceptance.md`, which no test reads, so the count stands, and `ruff check .`, `ruff format --check .` and
+  `python3 tools/check_documents.py` were re-run on the final tree and answered the same.
 
 Findings this piece reports:
 
-- `requirements.txt` names no version belonging to the piece: it pins only pytest 9.1.1 and ruff 0.16.10 and states
-  no Terraform or provider version, so the piece list named a file that holds nothing to move. Nothing was changed
-  in it, and the finding is recorded in `backlog.md`.
-- The provider version is stated as a literal at the print site in `src/panorama_to_terraform.py`, because the
-  provider pin's owner is a test helper that `src/` cannot read, so the one-owner rule for the provider holds in the
-  test set only. Measured after the move, the minimum is stated as a value in `src/` only at its owner, and the
-  `src/` statements that still read 1.14 are the grammar measurements.
-- The comments in `src/commit_actions.py` and `src/panorama_to_terraform.py` were shortened to what the print site
-  needs, because the longer form restated a rule `backlog.md` already holds. The comment in the workflow names the
-  decision the version comes from and states no second copy of it, and the CI rules section in this file points to
-  the workflow as the CI owner instead of stating a version, so the CI version is stated at the pin and not in the
-  gate rules.
-- No test asserts a version as a string, so no pin failed and no test file was changed. The version strings in the
-  test modules are dated measurements, and the documents that state the pinned versions are Piece 12A.3's.
+- The sweep finds one live statement of the pin outside the five documents the piece list named: `docs/ARCHITECTURE.md`
+  §6 named the measured 2.0.14 as the pinned provider schema, so the drift rows read as measured against the pin on
+  2026-11-21. That sentence is the one this piece changes in that document, and the file is added to the piece list in
+  `acceptance.md`.
+- The one-owner rule for a pin value holds at the owner and in the pins, not across the documents. The decision this
+  piece takes, which `backlog.md` asked for, is that a document names the owner it reads the value through and states
+  the version only as the pin itself or as the measurement it made, so the value is read at six documents as well as
+  at the owner. Recorded in `backlog.md`.
+- The pins that read the provider schema answer the same on the CI line as on this machine's binary, so the gate
+  needed no exception for the CI version.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`README.md`, `commit.md`, `requirements.txt`, `.github/workflows/python-tests.yml`, `pyproject.toml`,
-`tools/check_documents.py`, `src/commit_actions.py`, `src/panorama_to_terraform.py`, `tests/conftest.py`,
-`tests/test_commit_actions.py`, `tests/test_golden_files.py`, `tests/test_sanity_gate.py`, `tests/tflint/probe.tf`,
-`tests/tflint/probe.json`, and the 23 committed golden files.
+`commit.md`, `README.md`, `docs/USAGE_GUIDE.md`, `docs/RESOURCE_MAPPING.md`, `docs/COVERAGE_MATRIX.md`,
+`docs/CODEBASE_ASSEMBLY.md`, `docs/ARCHITECTURE.md` for the measurement records, `tools/check_documents.py`,
+`tests/conftest.py`.
 
-The next step is Piece 12A.3, the document statements. `acceptance.md` holds the Piece 12A.2 criteria until 12A.3
-starts.
+The next step is Piece 11C.3, the write boundary, in Epic 11. Piece 13A.1, the shape table, is the other open piece
+and needs its owner module in `src/` before a pin can read the table; it runs in the `input-shapes` worktree.
+Epic 12 has no open piece, so `acceptance.md` holds the Piece 12A.3 record until the next piece starts.
 
 ## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
 
@@ -199,9 +194,12 @@ holds them.
   matrix legs skip them. A pin that reads which directory one of those two checks ran on passes no binary, so it
   runs on a machine that has neither and reads the directory from the result.
 - The Terraform version CI runs is stated in the `terraform-gate` job of `.github/workflows/python-tests.yml`, which
-  is the CI owner for the tool pins, and the documents read it as the CI statement of that pin. A document that
-  names a Terraform version names the version its measurement was made on, so the recorded answers name 1.16.2 while
-  the CI job runs the version Epic 12 decision 1 takes; Piece 12A.3 brings the statements up to the CI version.
+  is the CI owner for the tool pins, and the documents read it as the CI statement of that pin. Each pin has one
+  owner: the Terraform minimum at `src/commit_actions.py::TERRAFORM_MINIMUM`, the provider version at
+  `tests/conftest.py::declared_provider`, and the CI Terraform version in the workflow. A document names the owner it
+  reads the value through and states a version only as the pin itself or as the measurement it made, so the recorded
+  answers name the binary that answered them: Terraform 1.16.2 is the binary on this machine, and a gate answer
+  measured on the CI line names the CI version.
 
 ## Watch for the shape tables and the write path
 

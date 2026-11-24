@@ -6,7 +6,8 @@ so every section names the module and the test that holds it, including the rule
 the iterated rule block (Epic 9, Phase 9D). The part that stays open is the zero-change plan
 half of §7, which no test can pin because a plan needs a device. Every statement about the
 converter names the module or the test that holds it.
-Provider facts come from the pinned provider (2.0.14) and are listed in §12.
+Provider facts come from the pinned provider (`~> 2.0.15`, the version `tests/conftest.py::declared_provider` reads
+from a committed golden `provider.tf`) and are listed in §12.
 
 ## 1. What a codebase is
 
@@ -702,8 +703,8 @@ Pinned by `tests/test_commit_actions.py`, including
 `::test_the_push_block_prints_after_the_commit_block`,
 `::test_check_order_names_actions_after_scope_blocks`, `::test_no_false_positive_across_the_corpus`, and
 `::test_the_goldens_pass_the_rule`. Both committed goldens hold `actions.tf` with the commit block and the push
-block for each unit that names a fact `SCOPE_ANSWER` answers, and declare Terraform 1.14; every other golden
-byte is unchanged.
+block for each unit that names a fact `SCOPE_ANSWER` answers, and declare the Terraform minimum
+`src/commit_actions.py::TERRAFORM_MINIMUM` states.
 
 ## 11. The credential rule — one statement
 
@@ -737,7 +738,13 @@ module states that name. `tests/test_robustness.py` pins that a parsed secret ne
 ## 12. Provider facts, verified 2026-10-27
 
 Measured against provider 2.0.14 through `terraform providers schema -json`, and the
-provider docs:
+provider docs. The pinned provider is `~> 2.0.15`, the version `tests/conftest.py::declared_provider` reads from a
+committed golden `provider.tf`, and `terraform providers schema -json` answers byte for byte the same for 2.0.14 and
+for 2.0.15, so every fact below holds for the pinned provider and no pin that reads the schema changes with the pin.
+Measured 2026-11-22 at 2,146,209 bytes, md5 `dfab791bae568bdd5ccdc69ca066a5b4`, and re-measured 2026-11-23 on the
+tree that holds the pin at 2,146,401 bytes, md5 `b7d5dcfbe72207e90c09e38fcbed2747`, answered the same by Terraform
+1.16.2 and by the CI line 1.16.7; the two runs state the same content for both versions, so the identity rests on
+the comparison between the two schemas, not on either figure.
 
 - 128 resource schemas and 128 data source schemas, and 2 action schemas:
   `panos_commit` and `panos_push_to_devices`.
@@ -762,7 +769,9 @@ provider docs:
   tool's choice. `rulebase` is a field of `location.device_group` in the pinned schema, so the
   four rule types are the rows `LOCATION_SCHEMA` declares `rulebase` for, and no second table
   names them. Pinned by `tests/test_import_blocks.py`.
-- Actions need Terraform 1.14 or later. The provider needs Terraform 1.8 or later.
+- Actions need Terraform 1.14 or later, which is the level the grammar needs; the project minimum is the value
+  `src/commit_actions.py::TERRAFORM_MINIMUM` states, above it, so the two are stated separately. The provider needs
+  Terraform 1.8 or later.
 - The provider block declares 16 arguments, and none is required, so a block that states only the facts the run
   names is a complete block (§11). Two are `sensitive`: `api_key` and `password`. `api_key` is the alternative to
   `username` + `password`, and the provider reads it from the environment `source_fetch.API_KEY_ENV` names (§11).

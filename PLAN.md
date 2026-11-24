@@ -96,33 +96,6 @@ the Epic 8 §4 facts, with the value half still gated on a live target. The reco
 documentation-derived response builder under `tools/`, read through the injected-producer seam, so Goal 1
 and the standard-library rule are unchanged. Promoted to an epic on decision.
 
-## Open epic — Epic 12, the pins (feature id `F12.x`)
-
-The pins are measurements. The provider constraint names the provider version the schema gate reads, the Terraform
-minimum names the lowest line the project has measured on, and the CI tool pins name the versions the recorded gate
-answers were measured on. The pieces are in `to-do.md`, the criteria and the measurements are in `acceptance.md`.
-
-Two decisions, taken 2026-11-22:
-
-1. **The Terraform minimum is `>= 1.16`, and CI runs the 1.16 line at its newest patch (1.16.7).** The floor is the
-   line the project's evidence covers, so no statement in the documents reaches past what was measured. `>= 1.14`
-   named a line whose upstream security support ended 2026-08-26 (1.15, 2026-10-21). The action grammar the tool
-   writes is accepted by 1.16 and 1.17 alike, measured on the committed goldens, so the choice was a floor, not a
-   capability.
-2. **The minimum gets one owner, the way the provider version has one.** The provider version already has one,
-   `tests/conftest.py::declared_provider`, read from a golden `provider.tf`. The minimum is written by three places
-   and read by one pin as a literal string, so it gets one constant and one helper in `tests/conftest.py`, and the
-   pins read the version through them.
-
-The provider pin moves to `~> 2.0.15` on the measurement: `terraform providers schema -json` answers byte for byte
-the same for 2.0.14 and 2.0.15 (measured 2026-11-22), so the 128 resource schemas, the 128 data source schemas, the
-two action schemas and the value lists the gate reads are the same set, and the move changes only the bytes the pin
-states. The provider fact the move does not settle is pan-os-codegen #745, the device-group membership marshal,
-which is inside the provider's own API call and reaches no committed output, so it stays in `backlog.md`.
-
-Definition of done: one place states each pin, the template, the goldens, the probe, CI and the documents state the
-same version, and every provider fact in the documents is a measurement made against that pin.
-
 ## Open epic — Epic 13, the shapes an input can be (feature id `F13.x`)
 
 The design record is `docs/INPUT_SHAPES.md`. The pieces are in `to-do.md`, the criteria are in

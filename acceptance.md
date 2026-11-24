@@ -1,181 +1,92 @@
 # Acceptance criteria
 
 This file carries the record for each active task, joined by hand at each merge. Each section names the worktree or
-branch that owns it. The Piece 12A.2 record is main's, the current task on main. The Epic 13 and Epic 14 records are
-retained because both epics still have open pieces in `to-do.md`; their criteria are not restated here, and each
-section names the worktree it came from.
+branch that owns it. The Piece 12A.3 record is main's, the current task on main. The Epic 13 and Epic 14 records are
+pointers: both epics still have open pieces in `to-do.md`, and their criteria are not restated here.
 
-## Piece 12A.2, the bytes the pins state (main, the current task on main)
+## Piece 12A.3, the statements the documents make about the pins (main, the current task on main)
 
-Piece 12A.2 of Epic 12, the pins (`PLAN.md`, Epic 12 decisions 1 and 2). The decisions are already taken: the
-Terraform minimum is `>= 1.16`, CI runs the 1.16 line at its newest patch (1.16.7), and the provider pin moves to
-`~> 2.0.15` on the schema identity measurement. Piece 12A.1 landed the owner and the helper and held the owner at
-the value the committed goldens carried; this piece moves the owner value and the committed bytes together. The
-document statements are Piece 12A.3, so no document version statement is changed here.
+Piece 12A.3 of Epic 12, the pins. The decisions this piece reads are already taken and landed: the Terraform minimum
+is `>= 1.16`, CI runs the 1.16 line at its newest patch (1.16.7), and the provider pin is `~> 2.0.15`. Piece 12A.1
+landed the owners and the helpers, Piece 12A.2 moved the owner value and the committed bytes. This piece moves the
+document statements, so the documents agree with the pins the codebase already holds.
+
+The pin owners this piece reads, and does not move:
+
+- the Terraform minimum, `src/commit_actions.py::TERRAFORM_MINIMUM`;
+- the provider version, `tests/conftest.py::declared_provider`, read from a committed golden `provider.tf`;
+- the Terraform version CI runs, the `terraform-gate` job of `.github/workflows/python-tests.yml`.
 
 ### Files this piece moves
 
-1. `src/commit_actions.py::TERRAFORM_MINIMUM`, the owner, from `1.14` to `1.16`.
-2. `src/panorama_to_terraform.py::TerraformGenerator.generate_provider_config`: the head comment and the
-   `terraform` block, so the bytes the print site writes are the bytes the goldens carry.
-3. `tests/tflint/probe.tf`: its `required_version` line and its panos provider version line.
-4. The 17 committed golden `provider.tf` files under `tests/golden/`: the Terraform minimum line, the provider
-   version line, and the head comment that names the baseline version.
-5. The 6 committed golden `actions.tf` files under `tests/golden/`: the header line that names the minimum.
-6. `.github/workflows/python-tests.yml`: `terraform_version` from `1.16.1` to `1.16.7`.
-7. `requirements.txt`: read and reported. It pins pytest 9.1.1 and ruff 0.16.10 and names no version belonging to
-   this piece, so the finding is that the file holds no pin for this piece; nothing is changed in it. The ruff pin
-   stays in `backlog.md`.
+1. `README.md`: the pinned provider statement, the Terraform requirement line, and the provider fact in the location
+   section. The check for other version statements in the document answers these three and nothing else.
+2. `docs/USAGE_GUIDE.md`: the pinned provider statement and the Terraform requirement line.
+3. `docs/RESOURCE_MAPPING.md`: the pinned provider statement, and the provider fact in the Verification section. The
+   dated provider facts in the body stay as they were measured.
+4. `docs/COVERAGE_MATRIX.md`: the version the golden `provider.tf` declares, which is the version the schema pins
+   read.
+5. `docs/CODEBASE_ASSEMBLY.md`: line 9, the sentence that names the pinned provider for the document; §12, the one
+   place that states why the 2.0.14 measurements hold for 2.0.15; and the §10 sentence that states what the committed
+   goldens declare, which is a live statement of the minimum.
+6. `docs/ARCHITECTURE.md`: the one live statement of the pin in that document, the §6 sentence that names the pinned
+   provider schema for the drift rows. Its other 2.0.14 statements are dated measurements and stay. The file is in
+   this piece's list because the sweep over the documents finds one live statement there, so the criteria below read
+   it too.
+7. `agent-status.md`: the position record for this piece, and the CI rule that says the statements are brought up to
+   the CI version.
+8. `to-do.md` and `PLAN.md`: the piece closes Epic 12, so the Epic 12 piece list and the Epic 12 planning section are
+   removed and the git history holds them.
+9. `backlog.md`: only for a finding this piece opens.
 
 ### Criteria
 
-1. The minimum is stated once in `src/`, at the owner. The three places that print it read the constant: the
-   `terraform` block in `panorama_to_terraform.py`, the generated `README.md` line, and the `actions.tf` header in
-   `commit_actions.render`. No print site states the version as a string.
-2. The pins read the minimum through `tests/conftest.py::declared_terraform_minimum` and read the provider version
-   through `tests/conftest.py::declared_provider`, so a pin holds the owner rule and not a second copy of a version.
-   A pin that asserts a version as a literal string is a finding this piece reports and does not fix, unless the
-   pin fails.
-3. A pin that compares generated bytes with a golden reads committed bytes, so the template and the goldens must
-   move in one commit. Before the commit the disagreement is visible: `tests/test_golden_files.py` fails, and after
-   it the same pins pass.
-4. A statement that names the level the action grammar needs (1.14) is a measurement of the language, not the
-   project minimum, so it stays as it was measured. Only what states the project minimum moves.
-5. The provider move changes no measured provider fact. Re-measured on this tree: `terraform providers schema -json`
-   answers byte for byte the same for 2.0.14 and 2.0.15, so the schema pins, the two action rows, the value lists,
-   and the committed tflint answer are unchanged by the move.
-6. The provider cache must serve the pinned provider. The schema pins skip only for a missing binary, so once
-   `terraform` is present `terraform init` must resolve 2.0.15 or the pins fail. Measured on this tree; no pin is
-   worked around.
-7. `tests/tflint/probe.json` is the committed answer for the committed probe content, so it moves only if the
-   answer changes. The probe edit keeps every line number the committed answer names, and no rule in the set reads
-   the `required_version` or the provider version string, so the committed answer is unchanged. This is a finding
-   reported from the committed bytes, because the binary is not on this machine and the pin skips for it.
-8. The documents that state the pinned versions (`README.md`, `docs/USAGE_GUIDE.md`, `docs/RESOURCE_MAPPING.md`,
-   `docs/COVERAGE_MATRIX.md`, `docs/CODEBASE_ASSEMBLY.md` §12) are Piece 12A.3 files and are not moved here, apart
-   from the stale minimum line in `agent-status.md`, which the status record this piece writes has to state
-   correctly.
+1. Each pin has one owner statement. A document names the owner it reads the value through, and states the value only
+   as the pin itself or as the measurement it made; no document states a pin as the project's rule through a copy of
+   the version.
+2. Every document that states the pin names the pinned provider, `~> 2.0.15`, and names the owner it reads the value
+   through. A dated measurement may name the version it was measured on; what cannot stay is a sentence that names
+   that version as the pin.
+3. A dated measurement stays as it was measured, and no measurement is restated to a different version. §12 carries
+   one sentence that states the schema identity, so a provider fact measured against 2.0.14 holds for the pinned
+   provider without changing the record of what was measured.
+4. The level the action grammar needs, 1.14, stays as a measurement of the language. Only a statement of the project
+   minimum moves, and no live statement of the project minimum reads 1.14, in the documents or in the status file. A
+   code comment that states 1.14 as the grammar level is not the project minimum and stays.
+5. §12 records the re-measurement of the schema identity on the tree this piece runs on: `terraform providers
+   schema -json` answers byte for byte the same for 2.0.14 and 2.0.15, 2,146,401 bytes, md5
+   `b7d5dcfbe72207e90c09e38fcbed2747`, measured 2026-11-23. The figures `PLAN.md` recorded on 2026-11-22 (2,146,209
+   bytes, md5 `dfab791bae568bdd5ccdc69ca066a5b4`) cannot be reproduced from the whole document on this run, so the
+   sentence names the run it rests on and the difference stays reported.
+6. The gate is measured on the CI line where the binary is available. The binary on this machine is Terraform 1.16.2,
+   so the CI line is measured through a 1.16.7 binary held in `/tmp/opencode`, taken from the release and checked
+   against the published SHA256SUMS. Every recorded number names the binary that answered it. If the CI line cannot
+   be run here, that is the finding, and no measurement is claimed on it.
+7. No test changes. The pins read the minimum through `tests/conftest.py::declared_terraform_minimum` and the
+   provider version through `tests/conftest.py::declared_provider`, so a document edit moves no pin and no golden.
+8. The document rules hold: no document states a test count, a document that names a test names a test that exists,
+   and `python3 tools/check_documents.py` reports no finding on the final tree. The three exact phrases the script
+   reads — the console line shape, the phrase that the root index names the test set, and the phrase that `README.md`
+   §Testing names each entry once — are not changed by this piece.
 9. The gate is measured single-threaded and conservatively: `ruff check .`, `ruff format --check .`,
-   `python3 tools/check_documents.py`, `python3 -m pytest`, one process, no parallel plugin.
+   `python3 tools/check_documents.py`, `python3 -m pytest`, one process, no parallel plugin. The Piece 12A.2 baseline
+   is 1,796 passed and 4 `tflint` skips, so 1,800 pins in 54 modules.
 
 ### Definition of done
 
-One place states each pin, the template, the goldens, the probe, CI and the documents agree on the versions, and
-the gate is green on the tree that holds the move.
+The six documents and the status file state the pinned values through their owners, no document carries a stale pin
+value, §12 names the schema identity so the earlier measurements hold on the pin, the gate is green on the tree that
+holds the piece, and Epic 12 closes.
 
 ## Epic 13, the shapes an input can be (the `input-shapes` worktree)
 
-The task is the planning of Epic 13 in the `input-shapes` worktree. The Epic 12 criteria this
-file held are in `a153b04`. The design record is `docs/INPUT_SHAPES.md`, the pieces are in
-`to-do.md`, and the live facts are in `backlog.md`.
-
-### Criteria
-
-1. **The archive input gains a producer, not a check.** The F5.1 rule is unchanged:
-   `check_bytes` is the one definition of the two checks, and the door runs them on the
-   decompressed bytes. No module states a second size definition, a second DTD rule, or a second
-   reader.
-2. **The size cap holds during decompression.** A pin hands the door a compressed input that
-   expands past the cap, and the refusal names the origin and builds no tree. The pin runs
-   offline on a committed fixture, so Goal 1 and the no-network rule are unchanged.
-3. **The accepted shapes are read from the bytes, not from the file name.** The single-member
-   gzip and single-XML-member tar.gz shapes are accepted only after the member decision is taken.
-   A selection rule that reads member order is refused by the determinism rule
-   (`docs/ARCHITECTURE.md` §6), so the refusal is the starting shape and the decision must be
-   taken before an emitter, a gate rule, or a report can read a selection.
-4. **One decision, stated once, for what the provenance record names for an archive read**: the
-   origin kind, the member name, which bytes `size` and `sha256` name, and how the cache rule
-   reads. The F5.3 rule already answers the byte question for the door — the record names the
-   bytes the door checked — so the decision is how the archive enters that rule, not a second
-   version of it.
-5. **The splitter diagnostic prints the fact, not a guess.** It states the number of
-   `device-group/entry` rows read, the shape the tree holds instead, and the source line. The
-   finding fits the four parts of the console-line rule (`container_coverage.console_line`,
-   `docs/ARCHITECTURE.md` §3.2), or prints in the report only because it compares two sets. The
-   exit code stays with the rules that read the files (`docs/ARCHITECTURE.md` §4.6).
-6. **Fixtures move the pins in one commit.** Each accepted shape gets a committed fixture read
-   through the fixture assembler, and the pins that state the printed fixture set name the new
-   fixture count in the same commit (`to-do.md` §Rules the layout keeps).
-7. **Version facts stay measurements.** The comparison of the "XML and XPath" page names the
-   pages measured — 9.1 and 11.1 & Later, 2026-11-23, same node model and entry shape — and the
-   10.2 leg stays open until measured. No document states a version difference it cannot name a
-   measurement for. The documentation-to-fixture relationship is owned by
-   `docs/API_DOCUMENTATION_AND_MOCKS.md`, so this epic adds no second rule for it.
-8. **Live-target facts stay in `backlog.md`**: the UI download form, the backup DOCTYPE question,
-   multi-member bundles, and the unfinished comparison leg. Nothing in the design record states
-   them as facts.
-9. **The layout rules hold**: `docs/INPUT_SHAPES.md` is named in the `docs/README.md` index and
-   carries its owner row; the shape table names its owner module in the `docs/ARCHITECTURE.md` §1
-   table when it lands; no new module states a second naming rule, writer, console line, or
-   environment name, so the pins that scan the `src/` set read it with the other modules.
-10. **No `src/` path that Epic 11C or Epic 12 runs on is touched by this worktree**, and the
-    shared tracking markdown is merged by hand against main.
-
-### Definition of done
-
-Every rule in `docs/INPUT_SHAPES.md` names its owner. Each pending decision in §2 is recorded as
-a decision before the code that reads it lands, and the pins that hold each rule run offline on
-committed material.
+Pointer. The design record is `docs/INPUT_SHAPES.md`, the pieces are in `to-do.md` §Epic 13, and the live facts are in
+`backlog.md`. The criteria this file held for that worktree are in `d4996b5`; they are not restated here, and no piece
+of Epic 13 is open on main for this task.
 
 ## Epic 14, the blocks a run binds to the live config (the `import-pairing` worktree)
 
-The task was the planning of Epic 14 in the `import-pairing` worktree, on branch `import-pairing` from main
-`c845f07`, 2026-11-23, merged into main at `9fe33c7`. The design record is `docs/IMPORT_BINDING.md`, the pieces are
-in `to-do.md`, and the live facts are in `backlog.md`. No decision is taken, so no piece can be written from one
-yet, and no `src/` file is touched until a piece lands. The shared tracking markdown needs a manual join against
-main at merge.
-
-### Criteria
-
-1. **The mode is data read through its record owner.** A later run reads the decision back through
-   `unit_manifest.parse_rows`, and the merged record is the codebase-level view, so no report or gate rule states
-   a second mode rule. `--selection` names the read set only (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1), so the mode
-   needs its own scope-name argument, read through `container_coverage.is_scope_path` and `SCOPE_PATH_ROOTS`, the
-   one scope-path definition, and no module states a second unit set.
-2. **The mode sits at one level until the entry-level decision is taken.** A device, a virtual system, a device
-   group and a template are already units, so a per-device or per-device-group request needs no new level. If an
-   entry-level mode is taken, `OWNERSHIP.json` is the record that holds it, because that record already holds one
-   row per entry the run emits, and `unit_manifest.units` stays the one unit set.
-3. **The mode cannot depend on order.** A declaration that reads the order the entries appear in is refused by
-   `docs/ARCHITECTURE.md` §6, so the argument is an explicit list of scopes or a refusal, and a mode a run
-   declares must agree with the mode the merged record names for the same unit. The argument is held by the CLI
-   and not by a rule owner, which is the rule the no-flag scan holds.
-4. **A shape change names the committed files it moves.** A field that enters `unit_manifest.FIELD_ORDER` is
-   printed for every row, so the golden data files move in the same commit as the pins that read the row. The
-   criterion is not that no golden moves, but that a piece states which committed files it moves; a run that
-   declares no mode writes today's bytes only where the decision says so, which is the F5.5 and F6.4 precedent.
-5. **The whole-block fact is a coverage fact.** It compares the properties a matrix row declares with the fields
-   the emitter reads on a run, so it is a WARN and the exit code stays with the rules that read the files
-   (`docs/ARCHITECTURE.md` §4.6). Its owner is the property scan through `entry_coverage.py`, its report section
-   follows the F3.9 grouping rule, and the finding fits the four parts of the console-line shape
-   (`container_coverage.console_line`) or prints in the report only.
-6. **The completeness half states no rule of its own.** It compares the block set the one block reader read with
-   the entry set the run's ledger read, so it is the same shape as the round-trip cross-check; it reads the unit
-   through `unit_manifest.units` and the mode through the record, and the agreement half stays in
-   `sanity_checks.check_import_blocks`.
-7. **A device fact reaches an id only through a source the provenance record can name.** The offline half is a
-   site value the operator declares, read through `site_data.py` and printed through `VALUE_VARIABLES` so the
-   block and the id state the same fact. The rule that a run with no network passes CI is unchanged, and the live
-   half stays in `backlog.md`.
-8. **The rule types stay reported until the shape decision and the F3.5 rulebase value land.** No unverified
-   value is written, and the order pins, the iterated block rule and the goldens move together if the shape
-   changes, so a shape change cannot be a print-only change.
-9. **Read-through and binding cannot both claim one name.** A unit that binds its entries writes no `data` block
-   for a name it binds, and a read-through scope stays labelled in the generated `README.md` until the built-in
-   name table lands.
-10. **Plan facts stay measurements.** No test can pin a plan, because a plan needs a device, so the offline
-    reading is the property scan measured on a run, and the Terraform behaviour for an import block whose resource
-    is already in state is recorded as a decision to take on measurement.
-11. **Every rule names its owner, and a pending owner is named by the decision that takes it.** A document names
-    only tests that exist, and a pending pin says it is pending.
-12. **The layout rules hold**: `docs/IMPORT_BINDING.md` is named in the `docs/README.md` index and carries its
-    owner row; no new module states a second naming rule, writer, console line, or environment name, so the pins
-    that scan the `src/` set read it with the other modules.
-13. **The planning touched no `src/` path that Epic 11C or Epic 12 runs on.** It merged into main 2026-11-23, so
-    the pieces run on main, and a piece touches only the paths its decision names.
-
-### Definition of done
-
-Every rule in `docs/IMPORT_BINDING.md` names its owner. Each pending decision in §2 is recorded as a decision
-before the code that reads it lands, each live fact is recorded in `backlog.md`, and the pins that hold each rule
-run offline on committed material.
+Pointer. The design record is `docs/IMPORT_BINDING.md`, the pieces are in `to-do.md` §Epic 14, the decisions are in
+the record §2, and the live facts are in `backlog.md`. The criteria this file held for that worktree are in `0b917e7`;
+they are not restated here. No decision is taken, so no piece can be written from one yet, and no `src/` file is
+touched until a piece lands.
