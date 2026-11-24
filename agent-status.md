@@ -434,3 +434,11 @@ Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-
 The next step is the acceptance review of the criteria, then the first decision, which is whether the mode stops at
 the unit (record §2 decision 1). The second decision is the shape cost in fact 11, because it names the committed
 files a piece would move. `acceptance.md` holds the Epic 14 criteria until the first piece lands.
+
+Merge, 2026-11-23: the branch merged into main at `9fe33c7` with a merge commit, so the Epic 14 pieces run on main
+and the `import-pairing` worktree holds no further work. No manual join was needed, because main had not moved past
+`c845f07`, the commit the branch was based on. Neither was pushed. The gate re-measured 2026-11-23 single-threaded
+on the merged tree: `ruff check .` clean at `py310`, `ruff format --check .` clean on the 110 files it reads,
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,796
+passed and the same 4 `tflint` skips in 271.5 s, the same counts as the measurement above, because no test and no
+`src/` file changed by the merge.

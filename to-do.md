@@ -83,10 +83,11 @@ file until a piece lands.
 
 ## Epic 14 — the blocks a run binds to the live config (design record `docs/IMPORT_BINDING.md`)
 
-Planned in the `import-pairing` worktree, 2026-11-23. The decisions are in `docs/IMPORT_BINDING.md` §2, the
-criteria are in `acceptance.md`, and the live facts are in `backlog.md`. This worktree touches no `src/` file
-until a piece lands, and the shared tracking markdown is joined by hand against main. No piece can be written
-from an untaken decision, so each piece names the decision it needs.
+Planned in the `import-pairing` worktree, 2026-11-23, and merged into main at `9fe33c7`, so the pieces run on
+main. The decisions are in `docs/IMPORT_BINDING.md` §2, the criteria are in `acceptance.md`, and the live facts
+are in `backlog.md`. No `src/` file is touched until a piece lands, and the shared tracking markdown is joined by
+hand against main when a branch still holds work. No piece can be written from an untaken decision, so each piece
+names the decision it needs.
 
 ### Phase 14A, the mode as data
 

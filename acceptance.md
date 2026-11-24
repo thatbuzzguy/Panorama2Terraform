@@ -1,7 +1,8 @@
 # Acceptance criteria
 
-Three tasks are active on three branches, so this file carries each record, joined by hand at each merge.
-Each section names the worktree that owns it.
+This file carries the record for each active task, joined by hand at each merge. Each section names the worktree or
+branch that owns it. The Epic 12 record is main's; the Epic 13 and Epic 14 records came from the `input-shapes` and
+`import-pairing` worktrees and merged into main 2026-11-23, so their pieces run on main.
 
 ## Piece 12A.1, one owner for the Terraform minimum (main, the current task on main)
 
@@ -104,9 +105,10 @@ committed material.
 
 ## Epic 14, the blocks a run binds to the live config (the `import-pairing` worktree)
 
-The task is the planning of Epic 14 in the `import-pairing` worktree, on branch `import-pairing` from main
-`c845f07`, 2026-11-23. The design record is `docs/IMPORT_BINDING.md`, the pieces are in `to-do.md`, and the
-live facts are in `backlog.md`. No `src/` file is touched until a piece lands.
+The task was the planning of Epic 14 in the `import-pairing` worktree, on branch `import-pairing` from main
+`c845f07`, 2026-11-23, merged into main at `9fe33c7`. The design record is `docs/IMPORT_BINDING.md`, the pieces are
+in `to-do.md`, and the live facts are in `backlog.md`. No `src/` file was touched during the planning, and no
+decision is taken yet, so no piece can be written from a decision.
 
 ### Criteria
 
@@ -154,8 +156,8 @@ live facts are in `backlog.md`. No `src/` file is touched until a piece lands.
 12. **The layout rules hold**: `docs/IMPORT_BINDING.md` is named in the `docs/README.md` index and carries its
     owner row; no new module states a second naming rule, writer, console line, or environment name, so the pins
     that scan the `src/` set read it with the other modules.
-13. **No `src/` path that Epic 11C or Epic 12 runs on is touched by this worktree**, and the shared tracking
-    markdown is joined by hand against main.
+13. **The planning touched no `src/` path that Epic 11C or Epic 12 runs on.** It merged into main 2026-11-23, so
+    the pieces run on main, and a piece touches only the paths its decision names.
 
 ### Definition of done
 
