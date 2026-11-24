@@ -1,78 +1,66 @@
 # Agent Status
 
-## Current position (main, Piece 11C.3, 2026-11-23)
+## Current position (main, Piece 13A.1, 2026-11-24)
 
-Piece 11C.3 is complete on main, 2026-11-23, and is not pushed. It is the write boundary of
-`docs/MULTI_RUN_CODEBASE.md` §6: each of the three §6 rules names its owner and the pin that holds it, the pins run
-offline on the committed pair, and update-run behaviour (overwrite what it owns, delete nothing, no self-record) is
-pinned. This piece closes Epic 11, so the Epic 11 piece list is removed from `to-do.md` and the Epic 11 planning
-section from `PLAN.md`; the facts that need a fact a live target or a fixture states stay in `backlog.md`, and the
-git history holds the piece records for Pieces 11B.1 to 11C.3 and 12A.1 to 12A.3. The next piece is Piece 13A.1, the
-shape table, in the `input-shapes` worktree. The commit that holds this record holds the pins, the rules and the
-tracking markdown, and neither it nor the previous commit is pushed.
-
-No behaviour changed and no committed byte moved: the three rules state what the write path already does, so no pin
-reads a gate result or an exit code and no golden moved.
+Piece 13A.1 is complete on main, 2026-11-24, and is not pushed. It is the input shape table of
+`docs/INPUT_SHAPES.md`, the first piece of Epic 13: the table is one machine-readable table with one owner module
+in `src/`, so a document links to it instead of restating a row. The commit holds the table module, the pins that
+read it, the document edits, and the tracking markdown. The piece record for Piece 11C.3 (Epic 11, the write
+boundary, which is complete) is held by the git history at `1fdf5b7`.
 
 What landed:
 
-- `src/write_path.py` states the rules as its own, in the module that owns the write path: rule 5 (the tool owns every
-  file it writes, so a shape it has content for is written over the bytes an earlier run wrote for it, and a shape it
-  has no content for is not written), rule 6 (the write path holds no delete rule, and the only file removal in the
-  tool is the cache prune action in `provenance.py`, which acts on cache entries outside the two sets), rule 7 (the
-  write path holds no record of what it wrote, so the difference between two runs is read through git). Rule 4, the
-  run-set rule, was already landed and keeps its pins. The module states no file name, no second naming rule, no
-  second writer and no second unit set, so the definitions it holds are the byte rule, the two builders and the one
-  writer, which `tests/test_write_path.py` already pins.
-- `tests/test_write_path.py` gained group 5, the write boundary, with the five pins: the overwrite pin, the ownership
-  pin that places an operator file at the codebase root and holds that the run leaves it as the operator wrote it,
-  the delete pin that reads the write (no file and no directory removed, including inside the ten units read only
-  through the record), the scan pin that reads removal as calls and holds that the write path holds none while the
-  only file removal in `src/` is `provenance.prune` acting through `prunable_entries` on cache entries, and the
-  no-record pin that reads each record module's declared field set and holds that none names a run, a writer, or a
-  timestamp. The module now reads the committed pair through `tests/conftest.py` instead of naming it.
-- `docs/MULTI_RUN_CODEBASE.md` §6 names each rule's owner and its pins, and the stale-file boundary stays the open
-  half. `docs/ARCHITECTURE.md` §1 names the rules `write_path.py` keeps, `README.md` §Testing names what the module
-  pins, and `acceptance.md` holds this piece's criteria with the Epic 13 and Epic 14 records as pointers. No new
-  module or test file, so `tests/test_layout.py::test_the_indexes_name_every_document_under_them` needed no change.
+- `src/input_shapes.py`, the owner module: `SHAPE_ROW_FIELDS` (the seven fields `shape`, `content`, `entry_point`,
+  `printed_line`, `status`, `pending_on`, `measured_through`), `STATUS_HELD`, `STATUS_PENDING`, and `SHAPE_TABLE` as
+  pure literal data, 19 rows (15 held, 4 pending). The module states no check, no reader, no parser, no writer, no
+  console line, no naming rule, no environment name and no control-character set, so every line in a row is the
+  wording of the module that builds it. A pending row names no owner and states no line, because its rule has no
+  owner yet: the two open `docs/INPUT_SHAPES.md` §2 decisions and the splitter line Piece 13A.2 has to write.
+- `tests/test_input_shapes.py`, the 28 pins that read the table as data: the row shape, the status vocabulary, the
+  table read through `ast` so no row is a build, the pins defining no row, each held refusal row measured through
+  the owner its `measured_through` names, the accepted rows through `tests/conftest.py::input_refusal`, the pending
+  rows, the measured placeholder set, and the two entry points printing the same line for a row through two
+  subprocess runs. A row that states a number as wording is a finding, because the pins read the placeholders.
+- `tools/check_documents.py` gained check 7, the shape table: the owner document names the owner module, and no
+  markdown restates a row. It reads a word window, so its length is what separates a copy from prose that shares the
+  tool's vocabulary (four words inside a quotation or a code span, six words anywhere), and the `src/` scan for the
+  table reads it through `ast` like the other tables. The check is recorded in `tools/README.md`.
+- `docs/INPUT_SHAPES.md` moved from planning to rules: §3 names `src/input_shapes.py` and `SHAPE_ROW_FIELDS`, the
+  pins, the placeholder set and the status vocabulary; §1 item 1 links to the table instead of quoting parse wording.
+  The §2 decisions stay open.
+- The index rows: `docs/ARCHITECTURE.md` §1 names `input_shapes.py` and the rule it keeps, `README.md` §Testing
+  names the new test module, `docs/README.md` names it as a machine-readable table. The restated rows in `README.md`,
+  `docs/USAGE_GUIDE.md` §Troubleshooting, `docs/DEVICE_GROUP_SPLITTING.md` and `docs/README.md` are links now.
+  `docs/LICENSING.md` counts moved to 25 modules and 21 modules without a notice, because the new module is the 25th.
 
-Measurement of the committed pair, taken 2026-11-23 through `tests/conftest.py` with `kitchen_sink.xml` as the
-codebase and `address_objects.xml` as the second run: the solo run of the second fixture exits 0, the codebase run
-exits 0, and the second run writing into a copy of its output exits 1, which is the record-merge condition recorded
-in `backlog.md` and not the write boundary. The tree holds 83 files before and 83 after: nothing appeared and nothing
-disappeared, and 76 files are byte-identical. The 7 that differ are the six root-set files the run writes
-(`CODEBASE_MANIFEST.json`, `OWNERSHIP.json`, `CONVERSION_REPORT.txt`, `MANUAL_SETUP_REPORT.txt`, `SANITY_REPORT.txt`,
-`SOURCE.txt`) plus `shared_45ca31c3/address_objects.tf`, and that file agrees byte for byte with the solo run of the
-same fixture. Inside the run's own unit directory the first run wrote 12 files; the second run has content for 3
-shapes, so it wrote those 3 and left the other 9 as the first run wrote them. An operator `terraform.tfvars` at the
-codebase root is byte for byte as the operator wrote it.
-
-Gate, measured 2026-11-23 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
-`ruff format --check .` clean on the 110 files it reads (81 Python, 29 markdown),
-`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,801
-passed and the same 4 `tflint` skips, so 1,805 pins in 54 modules, in 251.3 s. The Piece 12A.3 baseline was 1,796
-passed, so the count moved by the five pins this piece adds. The five new pins are all in
-`tests/test_write_path.py`, which reads 28 pins (23 before). `tflint` is absent, so the 4 skips are the `tflint` pins
-in `tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran.
+Gate, measured 2026-11-24 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
+`ruff format --check .` clean on the 112 files it reads (82 Python, 30 markdown),
+`python3 tools/check_documents.py` reports no finding, and `python3 -m pytest` in one process exits 0 with 1,829
+passed and the same 4 `tflint` skips, so 1,833 pins in 55 modules, in 301.4 s. The Piece 11C.3 baseline was 1,801
+passed in 54 modules, so the count moved by the 28 pins this piece adds. `tflint` is absent, so the 4 skips are the
+`tflint` pins in `tests/test_sanity_gate.py`; `terraform` is present, so the provider-schema pins ran.
 
 Findings this piece reports:
 
-- The write-boundary pins cannot read which shapes a run wrote from the tree, because a byte that agrees with an
-  earlier run is not marked, so the overwrite pin reads a solo run of the same fixture as the shape set. That is the
-  same reason the stale-file boundary stays open: deciding a file is stale needs a record of what the tool wrote
-  before, which the tool does not hold. Recorded in `backlog.md`.
-- The operator file has no owner constant: `docs/CODEBASE_ASSEMBLY.md` §11 states the rule in prose and
-  `src/site_data.py` owns only the printed form's name, so the pin states `terraform.tfvars` to place a file. Recorded
-  in `backlog.md`.
-- `tests/test_write_path.py` named the committed pair as its own constants; it now reads them through
-  `tests/conftest.py`, which closes that part of the recorded finding.
+- Check 7 reads a word window, and four words is not enough: `identity key cannot` is part of a row's line and also
+  ordinary prose about the identity rule, which three documents state as prose. The recorded lengths are the guard,
+  not the intent, so a short quote of a row cannot be flagged. Recorded in `backlog.md`.
+- The shape table pins read the owners' wording, so `xml_input.py` or `state_input.py` cannot reword a refusal
+  without moving the rows in the same commit. Recorded in `backlog.md`.
+- The two license counts are read from the working tree, which `docs/LICENSING.md` says they are not, so the counts
+  moved with this piece by writing the document rather than by measuring it. Recorded in `backlog.md`.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/MULTI_RUN_CODEBASE.md` §6, §8 and §9, `docs/CODEBASE_ASSEMBLY.md` §11 and §14,
-`docs/ARCHITECTURE.md` §1 and §6, `tests/test_layout.py`, `tools/check_documents.py`, `tests/conftest.py`,
-`src/write_path.py`, `src/provenance.py`, `src/unit_manifest.py`, `src/ownership.py`, `src/site_data.py`,
-`src/reference_edges.py`, `src/rule_data.py`, `src/commit_actions.py`, `src/import_blocks.py`,
-`tests/test_write_path.py`.
+`commit.md`, `README.md`, `tools/README.md`, `docs/README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §1 and
+§3.2, `docs/USAGE_GUIDE.md` §Troubleshooting, `docs/DEVICE_GROUP_SPLITTING.md` §Troubleshooting,
+`docs/LICENSING.md`, `docs/IMPORT_BINDING.md` §2, `tests/test_layout.py`, `tests/conftest.py`,
+`tools/check_documents.py`, `src/input_shapes.py`, `src/xml_input.py`, `src/state_input.py`,
+`src/panorama_to_terraform.py`, `src/split_device_groups.py`, `tests/test_input_shapes.py`.
+
+The next piece is Piece 13A.2, the splitter diagnostic: its shape table row stays pending until the line is written,
+so the pins that read the printed set move in the same commit. The two open Epic 13 §2 decisions (the member
+selection for a bundle with more than one XML member, and the bytes the provenance record names for an archive read)
+are each a pending row. Piece 13A.4's 10.2 documentation leg redirects and stays open.
 
 ## Position in the `input-shapes` worktree (Epic 13 planning, 2026-11-23)
 
@@ -83,7 +71,9 @@ decisions, taken 2026-11-23: the archive (gzip, tar.gz) is read through a produc
 door and gains no new check; the size cap applies during decompression, not after; the splitter
 prints the fact it reads instead of the current guess. The open decisions — the rule for a bundle
 with more than one XML member, and which bytes the provenance record names for an archive read —
-are recorded in the design record §2. No `src/` file is touched until a piece lands.
+are recorded in the design record §2 and stand as pending rows in the table. Piece 13A.1 landed on main on
+2026-11-24, so the table has its owner module in `src/`, and each further piece touches `src/` only for the row
+its decision moves.
 
 Merge, 2026-11-23: the branch merged into main at `1cd7ea2`. The shared tracking markdown
 auto-merged except `acceptance.md`, joined by hand so the file carries both active records — the
@@ -145,6 +135,10 @@ side still need a manual join.
 
 ## Watch for the shape tables and the write path
 
+- The input shape table is data with one owner module (`src/input_shapes.py`, `SHAPE_TABLE`), so a document links to
+  it and restates no row, which `tools/check_documents.py` check 7 reads, and each held row is measured through the
+  owner its `measured_through` names, so an owner that rewords a refusal moves the row in the same commit. A pending
+  row states no line and names no owner until its decision is taken, so no pin measures a line for it.
 - `state_coverage.ownership_key` is the one identity key rule, so the shadow scan, the ownership order and the
   state scan read their keys through it and no module states a second key. The key names the parent scope for a
   shadow, so the report line names which parent entry the child repeats, and the parent entry stays in the

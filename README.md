@@ -352,8 +352,9 @@ different questions.
 - **API:** `curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml`
 
 A `.tar.gz` or `.gz` file is not an accepted input. `src/xml_input.py` is the only input read and
-no producer decompresses, so archive bytes reach the parse as raw bytes and the parse answers
-"not well-formed (invalid token)". Extract the XML member first. The UI export of technical
+no producer decompresses, so archive bytes reach the parse as raw bytes and the parse answers the
+line the input shape table states for the magic-bytes row ([`src/input_shapes.py`](src/input_shapes.py)).
+Extract the XML member first. The UI export of technical
 support data is a bundle, not a configuration export. Reading an archive through the input
 boundary is planned in Epic 13 ([docs/INPUT_SHAPES.md](docs/INPUT_SHAPES.md)); until that piece
 lands, extract first.
@@ -560,6 +561,9 @@ Input and the read layer:
 - `tests/test_state_input.py` - the state producer: the two byte checks on the state bytes, the entry
   shape a scan can read, the document refusals, the record facts, the CLI argument rules, and the
   offline run that calls no producer
+- `tests/test_input_shapes.py` - the input shape table read as data: the one row shape, the table module stating no
+  rule an owner states, each held refusal row measured through the owner its row names, the accepted rows through the
+  shared read rule, and the pending rows stating no line
 - `tests/test_parse_helpers.py` - the six value readers call the read layer's whitespace rule, and an absent
   element answers `None`
 

@@ -142,9 +142,11 @@ python3 src/panorama_to_terraform.py export.xml --state production.tfstate --wor
   the state entry's resource address, because a state entry has no source line of its own. Both facts
   are operator actions: the console prints no state line and neither changes the exit code.
 - The state document is refused when the bytes are not JSON, when the document is not one object with a
-  `resources` array, when a `resources` item is not an object, or when a resource names no `type` or no
-  `name`, because the identity key cannot read it. A refusal names the file, exits 1, and writes no
-  record. A state document larger than `--max-input-bytes` is refused before the read.
+  `resources` array, when a `resources` item is not an object, or when a resource holds no `type` or no
+  `name`, so no identity key can be built for it: the run prints the line the input shape table states for
+  that shape ([`src/input_shapes.py`](../src/input_shapes.py), [INPUT_SHAPES.md](INPUT_SHAPES.md) §3). A
+  refusal names the file, exits 1, and writes no record. A state document larger than `--max-input-bytes` is
+  refused before the read, and the run prints the line the table states for the size shape.
 - `SOURCE.txt` records the state source last, in read order, with `-` for the two request fields: it
   references no cache entry, so it prunes nothing.
 
@@ -615,9 +617,7 @@ Four things explain the shape of the output:
 
 | Symptom | Cause and action |
 |---|---|
-| `ParseError: not well-formed` | The export is truncated or invalid. Export again from Panorama. |
-| `Error: ... larger than the limit` | The input exceeds `--max-input-bytes`. Raise the limit only for a trusted file. |
-| `Refused: input declares a DTD` | The file is not a Panorama export. Do not disable the check; obtain the export again. |
+| Input refused at the read layer | The run prints the line [`src/input_shapes.py`](../src/input_shapes.py) states for the shape it read ([INPUT_SHAPES.md](INPUT_SHAPES.md) §3). A truncated or invalid export is the parse row, an input over `--max-input-bytes` is the size row, and a document that declares a DTD is the DTD row. Do not disable the checks; export again from Panorama, and raise the limit only for a file you trust. |
 | Gate FAIL on `references` | A `.name` reference points at a resource this run did not declare. Read `SANITY_REPORT.txt`; the converter never declares a resource to make a reference work. |
 | Gate FAIL on `variables` | A declared variable has no `var.` consumer, or a `var.` consumer names a variable this run does not declare. The run declares the host name, the site values it printed (F6.6), and the names it records with no value for it (F6.10.4, §11). Read `SANITY_REPORT.txt` |
 | Gate WARN on `placeholders` | Expected. A VPN pre-shared key is a placeholder, and you must set it before apply. |

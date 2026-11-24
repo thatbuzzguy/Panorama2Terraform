@@ -20,6 +20,10 @@ Checks:
    read for the claims and not for the count rule.
 6. `README.md` §Testing names each entry once, which is the rule that section states. A pin holds a name being
    present and cannot hold a name appearing once, so this is a document review, not a pin.
+7. The shape table has one owner module, its owner document names that module, and no document restates a row. A
+   document that links to the table holds no row wording, so the table stays one definition. Four consecutive words
+   of a row's line inside a quotation or a code span is a restated line, and six consecutive words anywhere is a
+   restated line in prose, because four words of shared vocabulary is not yet a copy of the line.
 
 Exit 0 when every check agrees, 1 when a finding is printed.
 """
@@ -65,6 +69,8 @@ CLAIM_RE = re.compile(r"`(tests/[A-Za-z0-9_]+\.py)::([A-Za-z0-9_]+)`")
 COUNT_RE = re.compile(r"(?<!path )(?<!F\d )\b(\d[\d,]*) (pins|test modules|test functions|collected pins)\b")
 # A list entry in `README.md` §Testing is one name, so the check reads the name at its start and no prose.
 ENTRY_RE = re.compile(r"^- `([^`]+)`")
+# A line a document quotes, either as a code span or inside double quotes, which check 7 reads for row wording.
+QUOTE_RE = re.compile(r"`([^`]*)`|\"([^\"]*)\"")
 UPSTREAM = "devnullNZ"
 OURS = "Ryan Brown"
 
@@ -76,6 +82,7 @@ SHAPES = (
     ("src/commit_actions.py", "commit_actions.py", "ACTION_ROW_FIELDS"),
     ("src/import_blocks.py", "import_blocks.py", "IMPORT_ROW_FIELDS"),
     ("tests/test_coverage_matrix.py", "resource_mapping.py", "MATRIX_ROW_FIELDS"),
+    ("src/input_shapes.py", "input_shapes.py", "SHAPE_ROW_FIELDS"),
 )
 
 findings = []
@@ -122,6 +129,15 @@ def code_matrix() -> list[dict]:
             and isinstance(node.targets[0], ast.Name)
             and node.targets[0].id == "COVERAGE_MATRIX"
         ):
+            return list(ast.literal_eval(node.value))
+    return []
+
+
+def shape_table() -> list[dict]:
+    """The input shape table read as data through `ast`, so the script imports no tool module (`tools/README.md`)."""
+    tree = ast.parse((SRC / "input_shapes.py").read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "SHAPE_TABLE":
             return list(ast.literal_eval(node.value))
     return []
 
@@ -355,6 +371,41 @@ def check_wording() -> None:
             findings.append(f"docs/ARCHITECTURE.md §1: the rule column for {row_name} does not name {shape_name}")
 
 
+def check_shape_table() -> None:
+    """Check 7: the shape table has one owner module, its owner document names that module, and no document restates
+    a row. A document that links to the table holds no row wording, so the table stays one definition. The check
+    reads two lengths, because four words is enough to quote the line but not enough to tell a quote from prose that
+    happens to share the tool's vocabulary: four consecutive words inside a quotation or a code span is a restated
+    line, and six consecutive words anywhere is a restated line in prose."""
+    text = (DOCS / "INPUT_SHAPES.md").read_text(encoding="utf-8")
+    if "input_shapes.py" not in text:
+        findings.append("docs/INPUT_SHAPES.md §3: the shape section must name the module that owns the table")
+    rows = shape_table()
+    if not rows:
+        findings.append("src/input_shapes.py: the shape table was not read as data")
+        return
+    for md in MARKDOWN:
+        body = md.read_text(encoding="utf-8")
+        quoted = " ".join(part for match in QUOTE_RE.finditer(body) for part in match.groups() if part)
+        prose = " ".join(body.split())
+        for row in rows:
+            words = row["printed_line"].split()
+            for length, where in ((4, quoted), (6, prose)):
+                if len(words) < length:
+                    continue
+                hit = next(
+                    (
+                        " ".join(words[start : start + length])
+                        for start in range(len(words) - length + 1)
+                        if " ".join(words[start : start + length]) in where
+                    ),
+                    None,
+                )
+                if hit:
+                    findings.append(f"{md.relative_to(ROOT)}: restates the shape table row {row['shape']!r} ({hit!r})")
+                    break
+
+
 def check_no_test_counts() -> None:
     """Check 5: no document states a test count; the count lives in `agent-status.md` and the git history."""
     for md in COUNT_MARKDOWN:
@@ -397,6 +448,7 @@ def main() -> int:
     check_wording()
     check_no_test_counts()
     check_test_set_names_each_entry_once()
+    check_shape_table()
 
     for finding in findings:
         print(f"FINDING: {finding}")

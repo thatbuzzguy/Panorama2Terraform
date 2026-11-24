@@ -44,7 +44,7 @@ that document instead of restating the rule.
 | Provider element per emitted type | `COVERAGE_MATRIX.md`, and `resource_mapping.COVERAGE_MATRIX` |
 | Migration workflow | `MIGRATION_GUIDE.md` |
 | Device group to template join | `DEVICE_GROUP_SPLITTING.md` |
-| Input shapes, the archive producer rule, the shape table, and the splitter diagnostic | `INPUT_SHAPES.md`; the shape table will name its owner module in the `ARCHITECTURE.md` §1 table when it lands |
+| Input shapes, the archive producer rule, the shape table, and the splitter diagnostic | `INPUT_SHAPES.md`; the shape table is code in `src/input_shapes.py`, which the `ARCHITECTURE.md` §1 table names, and §3 states the rules around it without restating a row |
 | Codebase unit, ownership, order between units, import blocks, scope objects, site data, commit action, the write path, the rule data pair | `CODEBASE_ASSEMBLY.md` §3 to §11 and §14, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `import_blocks.py`, `site_data.py`, `commit_actions.py`, `write_path.py`, `rule_data.py` |
 | Which block a run binds to the live object, the mode as data, the whole-block fact, and the completeness half for a bound unit | `IMPORT_BINDING.md` §1 to §4; `import_blocks.py` for the block shape and the row shape, `unit_manifest.py` for the unit row, `entry_coverage.py` for the property scan and the report line, and `sanity_checks.check_import_blocks` for the agreement rule. Each pending owner is named by the decision that takes it |
 | The run's read set and write set, the records as codebase state, the cross-run ownership, edge and order facts, the gate for a partial run, and the write boundary | `MULTI_RUN_CODEBASE.md` §1 to §7, and the modules `unit_manifest.py`, `ownership.py`, `reference_edges.py`, `sanity_checks.py`, `write_path.py`, and `codebase_state.py` for the merge rule |
@@ -64,6 +64,7 @@ that document instead of restating the rule.
 
 The machine-readable tables are code, not documents:
 [`../src/resource_mapping.py`](../src/resource_mapping.py),
-[`../src/container_coverage.py`](../src/container_coverage.py), and the entry marks in
-[`../src/entry_coverage.py`](../src/entry_coverage.py). A document explains a table and
+[`../src/container_coverage.py`](../src/container_coverage.py), the entry marks in
+[`../src/entry_coverage.py`](../src/entry_coverage.py), and the input shape table in
+[`../src/input_shapes.py`](../src/input_shapes.py). A document explains a table and
 never restates it row by row.

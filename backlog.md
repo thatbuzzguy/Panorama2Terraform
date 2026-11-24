@@ -216,7 +216,8 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
 - **Two license counts are read from the working tree, which the document says they are not.**
   `docs/LICENSING.md` line 30 states the counts are read at the commit the document names and not from the working
   tree, and the license checks read `git blame` and `git show` at that commit. The notice count and the module count
-  at `tools/check_documents.py` lines 304 to 310 read the working tree. They agree today (4 notices, 24 modules), so
+  at `tools/check_documents.py` lines 304 to 310 read the working tree. They agree today (4 notices, 25 modules, as
+  `src/input_shapes.py` moved the module count with Piece 13A.1), so
   the check passes by coincidence; a `src/` module that carries a notice fails a document that was correct when it
   was written. Reading both counts at the named commit settles this and the item above about the notice set not
   being pinned.
@@ -226,6 +227,21 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   and forbid two phrases. This is allowed by the rule that a wording check is a document review and not a pin, but
   the documents carry strings that cannot be paraphrased. The name checks in the same function (the §1 table row, the
   function name) are the pattern that does not depend on wording.
+- **Check 7 reads a word window, so its length is what keeps it from flagging prose.** Four consecutive words of a
+  row's line is enough for a quoted line, but the tool's own vocabulary reaches four words by accident: the words
+  `identity key cannot` are part of a row's line and also ordinary prose about the identity rule, which three documents
+  state. The check reads four words inside a quotation or a code span and six words anywhere, so a document that links
+  to the table passes and a document that copies the line does not. The cost is that a short quote of a row cannot be
+  flagged, so the guard is the length and not the intent. Measured 2026-11-24: at four words anywhere the check
+  reported 9 findings, of which 3 were prose that shares vocabulary; at six words anywhere it reported 1, and that one
+  was the genuine restatement in `docs/USAGE_GUIDE.md` §Troubleshooting.
+- **The shape table pins read the owners' wording, so an owner rewording moves the rows in the same commit.**
+  `tests/test_input_shapes.py` compares the line each owner builds with the row that mirrors it, so `xml_input.py` or
+  `state_input.py` cannot reword a refusal without the table changing, and the pins read the table as data so a row
+  that is written as a build is a finding. The two entry-point pins run both entry points in a subprocess, which is
+  the only place the printed line is measured at the entry point rather than at the print site. The pending rows read
+  no owner, because their rule has no owner yet, so no pin measures a line for them: that is the shape the piece
+  states.
 - **The absence pins read architecture, not behaviour.** Measured 2026-11-23: 10 test modules read a `src/` module's
   own source through `Path(module.__file__)`, 53 assertions read that text, 20 assert a word is absent, 4 assert that a
   module does not define a name (46 names across the four pins), and 1 asserts a module's exact definition set

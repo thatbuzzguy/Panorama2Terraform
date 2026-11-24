@@ -11,9 +11,10 @@ refused or read. The document index is in [README.md](README.md). The read rule 
 
 1. No producer decompresses anything. `src/xml_input.py` states no archive rule, and
    `read_input` hands raw bytes to the door, so archive magic bytes reach `reject_dtd`, the
-   prolog scan cannot read them, and the parse answers "not well-formed (invalid token)". The
-   splitter's firewall message is therefore only reached when the bytes already are XML: a
-   bundle member read after extraction, or a per-device export.
+   prolog scan cannot read them, and the parse answers the line the shape table states for the
+   magic-bytes row (`src/input_shapes.py`). The splitter's firewall message is therefore only
+   reached when the bytes already are XML: a bundle member read after extraction, or a per-device
+   export.
 2. The splitter answers through `device_associations`, so the fact it can state is the row set
    it read: zero `device-group/entry` rows, and the shape the tree holds instead. The current
    line "This may be a single firewall export, not a Panorama export." states a guess, not the
@@ -54,14 +55,33 @@ owner before the first piece lands:
    the cache holds exactly the bytes the boundary parsed — reads for an archive. The member
    name enters the record as a field the file case does not have.
 
-## 3. The shape table (pending)
+## 3. The shape table (rules, Piece 13A.1, 2026-11-24)
 
-One table: byte shape → accepted entry point → the refusal or report line the run prints. The
-machine-readable table is code, so the table needs one owner module in `src/` before a pin can
-read it, and the documents link to it instead of restating rows. Each accepted shape gets a
-committed fixture read through the fixture assembler, and the pins that state the printed fixture
-set name the fixture count, so a fixture and the pins move in the same commit
-(`to-do.md` §Rules the layout keeps).
+The table is one machine-readable table, held as data in `src/input_shapes.py`, which is its only
+owner. Each row states the byte shape, the content that shows it, the entry point that accepts it,
+the line the run prints for it, the status, the decision a pending row waits for, and the owner
+function the pins read the row through, as `SHAPE_ROW_FIELDS`. The document names the owner and
+states the rules around the table; it holds no row, and the row wording appears in no document,
+which `tools/check_documents.py` reports. Every document that describes a shape links here.
+
+1. **The module states no rule an owner states**, so each line is the measured wording of the module that builds
+   it: the size line from `xml_input.check_bytes` and `xml_input.read_input`, the DTD line from
+   `xml_input.check_bytes`, the parse line from `xml_input.parse_bytes`, and the state line from `state_input.parse_state`.
+   A row names its owner in `measured_through`, and `tests/test_input_shapes.py` measures the row by running the row's
+   content through that owner and comparing the printed line with the row. A pending row names no owner, because the
+   rule it waits for has no owner yet.
+2. **The parts of a line the pins measure are the origin and the byte counts**, held as `{origin}`, `{size}` and
+   `{limit}`. Every other part of a line is the row's own wording, so the pin compares the whole line, and a row that
+   states a number as wording cannot be measured.
+3. **The status vocabulary is two words.** `held` is a row the pins measure today; `pending` is a row whose line does
+   not exist yet, and a pending row states no line, names no entry point as accepting its shape, and names the
+   decision in §2 or the piece in `to-do.md` it waits for. A decision that lands moves the row in the same commit.
+4. **The shape is read from the bytes**, so no row names a file name, an extension, or a committed fixture, and the
+   pins decide acceptance from the row's content under different names. The committed fixture pair is Piece 13A.3,
+   which adds no row here, so the fixture-count pins do not move.
+5. **Every entry point prints the same line for the same bytes**, which the pins measure by running both entry points
+   on one row's content. A row that names `none` as its accepted entry point is a refusal row: the entry point prints
+   the refusal, and the line is that refusal.
 
 ## 4. The diagnostic rule
 

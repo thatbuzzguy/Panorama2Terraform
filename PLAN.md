@@ -96,8 +96,10 @@ Three decisions, taken 2026-11-23:
    source line — instead of the current guess, through the console-line owner or the report. The
    exit code does not change.
 
-Open decisions stay in the design record §2 until the first piece lands: the rule for a bundle
-with more than one XML member, and which bytes the provenance record names for an archive read.
+Open decisions stay in the design record §2 until each is taken: the rule for a bundle with more
+than one XML member, and which bytes the provenance record names for an archive read. The shape
+table has its owner module since Piece 13A.1, so each open decision is a pending row that names the
+decision, and a decision that is taken moves its row in the same commit.
 Measured offline, the entry shape the documentation states for 9.1 and for 11.1 & Later is the
 same, so the read layer agrees with the documented shape on both pages; the 10.2 comparison leg
 redirects and stays open.

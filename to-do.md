@@ -8,19 +8,18 @@ piece are in `acceptance.md`, with pointers to the Epic 13 and Epic 14 records.
 ## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
 
 Planned in the `input-shapes` worktree, 2026-11-23. The decisions are in `PLAN.md`, the criteria
-are in `acceptance.md`, and the live facts are in `backlog.md`. This worktree touches no `src/`
-file until a piece lands.
+are in `acceptance.md`, and the live facts are in `backlog.md`. Piece 13A.1 landed on main on 2026-11-24, so the
+shape table has an owner module in `src/`; each remaining piece needs a decision, a fixture, or a live fact.
 
 ### Phase 13A, the shapes as data and the diagnostic
 
-- **13A.1** — the shape table: one table, byte shape to accepted entry point to the refusal or
-  report line the run prints. The table needs one owner module in `src/` before a pin can read
-  it; the documents link to the table and restate no rows.
 - **13A.2** — the splitter diagnostic: the fact the run reads (zero `device-group/entry` rows,
   the shape the tree holds instead, the source line) through the console-line owner, or in the
-  report. The pins that read the printed set move in the same commit; the exit code stays.
+  report. The pins that read the printed set move in the same commit; the exit code stays. The
+  pending row in the shape table names this piece, so the row moves when the line is written.
 - **13A.3** — the committed fixture pair, one Panorama shape and one firewall shape, read through
-  the fixture assembler; the fixture-count pins move in the same commit.
+  the fixture assembler; the fixture-count pins move in the same commit. The shape table reads the
+  shapes from bytes, so the pair adds no row.
 - **13A.4** — the documentation comparison: the 9.1 and 11.1 & Later legs are measured, the 10.2
   leg redirects, so finish that leg or record the redirect as the finding.
 
@@ -42,10 +41,8 @@ file until a piece lands.
 
 - **13C.1** — how to get the correct export: the Panorama-level export holds the device-group
   rows, a per-device export holds the device's own config with none. Stated in `docs/USAGE_GUIDE.md`
-  and `docs/DEVICE_GROUP_SPLITTING.md`; the troubleshooting rows move from a guess to the named
-  fact.
-- **13C.2** — `docs/INPUT_SHAPES.md` moves from planning to rules when the first piece lands, and
-  the shape table names its owner module in the `docs/ARCHITECTURE.md` §1 table in the same commit.
+  and `docs/DEVICE_GROUP_SPLITTING.md`; the troubleshooting rows hold no row wording, because they
+  name the shape and link to the table, which `tools/check_documents.py` reads.
 
 ## Epic 14 — the blocks a run binds to the live config (design record `docs/IMPORT_BINDING.md`)
 
