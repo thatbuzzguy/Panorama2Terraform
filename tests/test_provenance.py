@@ -37,7 +37,6 @@ import pytest
 import api_requests
 import container_coverage
 import entry_coverage
-import input_shapes
 import provenance
 import sanity_checks
 import write_path
@@ -53,6 +52,7 @@ from conftest import (
     partial_run,
     run_main,
     run_script,
+    shape_row,
     tf_files,
     written_bytes,
 )
@@ -127,14 +127,6 @@ def _run_api(converter_module, fetch_module, tmp_path, monkeypatch, cache_dir=No
         == 0
     )
     return cache, out
-
-
-def _shape_row(name: str) -> dict:
-    """One shape-table row, read as data through the module that owns the table, so this module holds no archive
-    bytes of its own and reads the shape from the table's content."""
-    rows = [row for row in input_shapes.SHAPE_TABLE if row["shape"] == name]
-    assert len(rows) == 1, (name, "the table states each shape once")
-    return rows[0]
 
 
 def _record(out_dir) -> provenance.ProvenanceRecord:
@@ -246,8 +238,8 @@ def test_an_archive_record_names_the_archive_the_member_and_the_decompressed_byt
     archive bytes of its own, and the byte facts are read against the content the accepted row shows. The file case
     states `-` for the member field, through the `-` rule this module states.
     """
-    record_row = _shape_row("the decompressed bytes an archive read names in the provenance record")
-    accepted_row = _shape_row("XML bytes, no DTD, within the input limit")
+    record_row = shape_row("the decompressed bytes an archive read names in the provenance record")
+    accepted_row = shape_row("XML bytes, no DTD, within the input limit")
     path = tmp_path / "input"
     path.write_bytes(record_row["content"])
     origin = xml_input.SourceOrigin.for_path(path)
@@ -571,7 +563,7 @@ def test_an_archive_record_references_no_cache_entry(tmp_path, fetch_module):
     cache entry today, and the entry that would be written holds the bytes as they arrived, which no record names. The
     pins read the producer through `ast`, so this is the fact the owner states and not a guess.
     """
-    record_row = _shape_row("the decompressed bytes an archive read names in the provenance record")
+    record_row = shape_row("the decompressed bytes an archive read names in the provenance record")
     path = tmp_path / "input"
     path.write_bytes(record_row["content"])
     source = xml_input.parse_archive(record_row["content"], xml_input.SourceOrigin.for_path(path))

@@ -53,8 +53,17 @@ and not from a name, and one accepted member is expanded: a single-member gzip, 
 stream that holds a tar archive with exactly one member. The two checks run on the bytes the
 producer hands the door, which for an accepted shape are the expanded bytes. The read cap is
 applied while the bytes expand, so a bundle that expands past the cap is refused before a tree
-is built. The producer adds no check and no refusal wording: a shape it does not accept is
-handed to the door unchanged, and the parse answers it with the line the shape table holds.
+is built. The producer adds no check: a shape it does not accept is handed to the door
+unchanged, and the parse answers it with the line the shape table holds.
+
+Piece 13B.4 lands the member rule, `read_member` (`docs/INPUT_SHAPES.md` §2 rule 4, taken
+2026-11-24). A bundle that holds more than one member is read only when the operator declares
+which member, so with no declaration the rule answers with its own refusal, which the shape
+table mirrors as data. The declaration is the operator's argument, held by the CLI and not by
+this rule, so the rule takes it as an argument and states no argument rule of its own. The cap
+is applied while the declared member expands. A declared member the bundle does not hold reads
+no member, so the producer hands the bytes to the door unchanged and the parse answers them with
+the line the table already holds for them.
 
 Piece 13B.3 adds what the producer states for an accepted read: `ARCHIVE_KIND` as the source
 kind, and the member name it read from the shape, as `SourceOrigin.member`. The producer states
@@ -509,96 +518,156 @@ def _gzip_member_name(data: bytes) -> str | None:
     return data[position:end].decode("utf-8", "surrogateescape")
 
 
-def _single_tar_member(data: bytes) -> tuple[str | None, bytes] | None:
-    """The member a tar archive holds, as its name and its content, or None when the archive holds no single member.
+def _tar_members(data: bytes) -> list[tuple[str | None, bytes]] | None:
+    """The members a tar archive holds, as the name each header states and its content, or None when the bytes are
+    not a readable archive.
 
     `data` is already expanded, so this reads the archive structure and not a compressed stream: the producer
-    expands once. A stream the tar reader cannot read, or one that holds more than one member, is not an accepted
-    shape, so this answers None and the door answers the bytes with the line the shape table already holds.
+    expands once. A stream the tar reader cannot read answers None, which is the answer the producer gives for a
+    shape it does not accept, so the door gets the bytes unchanged.
+
+    A member that names nothing answers None for its name, so the record writes the value its own rule states for a
+    field that does not apply. This states no naming rule: the name is the one the header states.
     """
     try:
         with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
-            members = [member for member in archive if member.isfile()]
-            if len(members) != 1:
-                return None
-            handle = archive.extractfile(members[0])
-            content = None if handle is None else handle.read()
-            if content is None:
-                return None
-            # A member that names nothing answers None for its name, so the record writes the value its own rule
-            # states for a field that does not apply.
-            return (members[0].name or None, content)
+            members = []
+            for entry in archive:
+                if not entry.isfile():
+                    continue
+                handle = archive.extractfile(entry)
+                content = None if handle is None else handle.read()
+                if content is None:
+                    return None
+                members.append((entry.name or None, content))
+            return members
     except tarfile.TarError:
         return None
 
 
-def _expand_one_member(data: bytes, max_input_bytes: int) -> tuple[str | None, bytes] | None:
-    """The member an accepted gzip shape holds, as its name and its content, or None when the bytes are not one.
+def _read_members(data: bytes, max_input_bytes: int) -> list[tuple[str | None, bytes]] | None:
+    """The members the stream holds, as the name each one states and its content, in the order the stream states
+    them, or None when the bytes are not a readable stream.
 
     The read stops at `max_input_bytes + 1`, which is the cap `read_input` already states, applied while the bytes
     expand. This states no size rule of its own: `check_bytes` stays the one definition of the size check, and the
     door runs it on the bytes this function hands back, so a bundle that expands past the cap is refused before a
-    tree is built, and without the whole expansion being read.
+    tree is built, and without the whole expansion being read. A member whose expansion stops at the cap is the last
+    one read, because no further member is reached.
 
-    A stream with more than one member is not an accepted shape. The refusal the member rule prints for it has no
-    owner yet (`docs/INPUT_SHAPES.md` §2 rule 4, Piece 13B.4), so this function states no refusal: it answers None,
-    the producer hands the bytes to the door unchanged, and the parse answers them.
+    A member that holds a tar archive is read as the members that archive holds, so the count the member rule answers
+    for is the count the shape holds, whether the members are gzip members or archive members.
 
-    The name is the member fact the record states: the gzip header's name field, or the name the single tar member
-    states. A stream that states no name answers None for it, so the answer is not a second name rule.
+    The name is the member fact the record states: the gzip header's name field, or the name a tar header states. A
+    stream that states no name answers None for it, so the answer is not a second name rule.
     """
     if not data.startswith(GZIP_MAGIC):
         return None
-    name = _gzip_member_name(data)
-    reader = zlib.decompressobj(16 | zlib.MAX_WBITS)
-    try:
-        expanded = reader.decompress(data, max_input_bytes + 1)
-    except zlib.error:
-        # A stream with the magic and no readable member is not an accepted shape, so the door gets the bytes
-        # unchanged and the parse answers them with the line the shape table holds for them.
-        return None
-    if len(expanded) > max_input_bytes:
-        # The cap stopped the expansion. These are the bytes the door checks, so the size refusal is the answer.
-        return (name, expanded)
-    if not reader.eof or reader.unused_data:
-        return None
-    if expanded[TAR_MAGIC_AT : TAR_MAGIC_AT + len(TAR_MAGIC)] == TAR_MAGIC:
-        return _single_tar_member(expanded)
-    return (name, expanded)
+    members = []
+    position = 0
+    while position < len(data):
+        stream = data[position:]
+        if not stream.startswith(GZIP_MAGIC):
+            return members or None
+        name = _gzip_member_name(stream)
+        reader = zlib.decompressobj(16 | zlib.MAX_WBITS)
+        try:
+            content = reader.decompress(stream, max_input_bytes + 1)
+        except zlib.error:
+            # A stream with the magic and no readable member is not an accepted shape, so the door gets the bytes
+            # unchanged and the parse answers them with the line the shape table holds for them.
+            return members or None
+        if content[TAR_MAGIC_AT : TAR_MAGIC_AT + len(TAR_MAGIC)] == TAR_MAGIC:
+            archive = _tar_members(content)
+            if archive is not None:
+                members.extend(archive)
+                return members
+        members.append((name, content))
+        if len(content) > max_input_bytes:
+            # The cap stopped the expansion, so no further member is read. These are the bytes the door checks, so
+            # the size refusal is the answer.
+            return members
+        if not reader.eof:
+            return members
+        position += len(stream) - len(reader.unused_data)
+    return members
 
 
-def parse_archive(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
+def read_member(
+    data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES, declared: str | None = None
+) -> tuple[str | None, bytes] | None:
+    """The member rule (`docs/INPUT_SHAPES.md` §2 rule 4): the one member a run reads, as its name and its content,
+    or None when the shape holds no member to read.
+
+    One member is accepted, so a bundle that holds one member is read without a declaration. A bundle that holds
+    more than one member is read only when the operator declares which member, and the declaration is the operator's
+    argument, so this rule takes it as an argument and states no argument rule of its own: the CLI holds the argument
+    and this rule decides nothing the CLI decides. With more than one member and no declaration, this rule answers
+    with its own refusal, which the shape table mirrors as data, and it answers before the door is handed any bytes.
+
+    A declared member the shape does not hold reads no member, so this answers None and the producer hands the bytes
+    to the door unchanged, which is the answer the door already gives for them. A selection that reads the member
+    order stays refused by the determinism rule (`docs/ARCHITECTURE.md` §6), so this rule reads the members by name
+    and never by position.
+    """
+    members = _read_members(data, max_input_bytes)
+    if not members:
+        return None
+    if declared:
+        for name, content in members:
+            if name == declared:
+                return (name, content)
+        return None
+    if len(members) > 1:
+        raise UnsafeInputError(
+            f"refusing to read {origin_phrase(origin)}: the bundle holds more than one member "
+            "and the run declares none. Pass --member NAME to read one."
+        )
+    return members[0]
+
+
+def parse_archive(
+    data: bytes,
+    origin: SourceOrigin,
+    max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
+    member: str | None = None,
+) -> ParsedSource:
     """The archive producer (F5.1): read the shape from the bytes, expand one member, hand the bytes to the door.
 
-    Adding a source means adding a producer, not a check, so this function runs no check and states no refusal: the
-    two checks stay `check_bytes`, run by the door on the bytes the producer hands it, which for an accepted shape
-    are the expanded bytes. Bytes that are not an accepted shape are handed to the door unchanged, so the answer a
-    producer gets for them is the answer the door already gives.
+    Adding a source means adding a producer, not a check, so this function runs no check: the two checks stay
+    `check_bytes`, run by the door on the bytes the producer hands it, which for an accepted shape are the expanded
+    bytes. It states no refusal either: the member rule it calls states the refusal for a bundle that holds more
+    than one member, and a shape that rule does not answer for is handed to the door unchanged, so the answer a
+    producer gets for it is the answer the door already gives.
+
+    `member` is the declaration the operator's argument holds, and the producer takes it as an argument, so no
+    naming rule and no path rule appears here. A run that declares nothing reads the one member a bundle holds.
 
     For an accepted shape the origin gains the kind the archive read names and the member it took, and keeps the
     name and the path the producer was handed, so a record built from this source names bytes a reader can reopen.
     The producer states no value for a member it did not read, because the record module states that value.
 
-    Raises UnsafeInputError for a size or DTD refusal, and
+    Raises UnsafeInputError for a size, DTD or member refusal, and
     xml.etree.ElementTree.ParseError for malformed XML.
     """
-    member = _expand_one_member(data, max_input_bytes)
+    member = read_member(data, origin, max_input_bytes, member)
     if member is None:
         return parse_bytes(data, origin, max_input_bytes)
     name, content = member
     return parse_bytes(content, replace(origin, kind=ARCHIVE_KIND, member=name), max_input_bytes)
 
 
-def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
+def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES, member: str | None = None) -> ParsedSource:
     """The file producer (F5.1): read the file, hand the bytes to the producer, and parse what the door checks.
 
     The size is checked before the read, so an over-limit file is never allocated. The shape is read from the bytes
     the read returned, and the bytes that passed both checks are the bytes that are parsed, so the input is read
-    once and no check can be handed different bytes.
+    once and no check can be handed different bytes. `member` is the declaration the operator's argument holds, read
+    through the member rule.
     """
     origin = SourceOrigin.for_path(Path(path))
     data = read_input(origin.path, max_input_bytes)
-    return parse_archive(data, origin, max_input_bytes)
+    return parse_archive(data, origin, max_input_bytes, member)
 
 
 def positive_int(text: str) -> int:
@@ -623,4 +692,19 @@ def add_max_input_argument(parser: argparse.ArgumentParser) -> None:
             f"refuse an input larger than N bytes (default {_format_size(DEFAULT_MAX_INPUT_BYTES)}). "
             "A Panorama export is far smaller; raise the limit only for a trusted file."
         ),
+    )
+
+
+def add_member_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the shared --member flag so both CLIs behave the same (Piece 13B.4, `docs/INPUT_SHAPES.md` §2 rule 4).
+
+    The flag states no path rule and no naming rule of its own: it names one member of a bundle that holds more than
+    one, and the run reads the shape through the producer. A run that declares nothing reads the one member a bundle
+    holds, so the argument decides nothing an owner decides and refuses nothing by itself.
+    """
+    parser.add_argument(
+        "--member",
+        default=None,
+        help="the member to read from a bundle that holds more than one. A bundle that holds one member needs no "
+        "declaration, and a run that declares nothing is refused nothing by this flag",
     )

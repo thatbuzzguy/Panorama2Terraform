@@ -744,8 +744,7 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   the pins read the table through `ast`, so no call may build a row's content. The pins measure the decompression row
   against a limit they hold as their own constant, which sits between the row's content and what that content expands
   to; the row states no byte count, because the pins cannot read an expansion as a content size, and §3 rule 2 forbids
-  a row stating a number the pins cannot read from it. What stays open is the member-selection argument and the
-  refusal it prints, which Piece 13B.4 writes.
+  a row stating a number the pins cannot read from it.
 
 - Finding, measured 2026-11-24 on Piece 13B.3: the record row is the first held row whose answer is not a printed
   line, so the pins measure it as data. `tests/test_input_shapes.py::_answer` answers an exception for every other
@@ -757,6 +756,18 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   the two archive rows: the set is three rows, decided by content and not by which fact each row states, which is what
   §3 rule 4 asks for, because a row that names a build fact can only be read through the owner it names. Owner:
   `docs/INPUT_SHAPES.md` §3 rules 1 and 4.
+
+- Finding, measured 2026-11-25 on Piece 13B.4: the member rule has an owner, `xml_input.read_member`, so no row is
+  pending and no row names a piece. Two facts stay here because no pin reads them today.
+  1. `--member` is in the argument set both entry points read, so the api producer accepts a declaration and applies
+     no member rule, because `source_fetch.fetch()` runs the checks through `parse_bytes` and never through the
+     archive producer (§1 fact 6). No api pin reads a compressed response, so for an api run the argument decides
+     nothing until an api read can hold a bundle.
+  2. A declaration the bundle does not hold answers as a shape error and not as a missing member, because the rule
+     reads no member and the parse answers the line the table holds for the bytes as they arrived. A row for a name
+     that is not in its content cannot be held, because §3 rule 2 forbids a row stating a part the pins cannot read
+     from it, so this stays as an answer shape rather than a row.
+  Owner: `docs/INPUT_SHAPES.md` §2 rule 4, `docs/ARCHITECTURE.md` §1.
 
 - Finding, measured 2026-11-24 on the gate for Piece 13B.3: one full run answered 1,557 passed, 4 skipped and 287
   errors, and the same tree answered 1,844 passed and 4 skipped on the run after it. The 287 are the pins that read

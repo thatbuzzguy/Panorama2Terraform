@@ -16,11 +16,12 @@ refused or read. The document index is in [README.md](README.md). The read rule 
    applied while the bytes expand, at the count the read step already states, `max_input_bytes + 1`, so a bundle that
    expands past the cap answers the size rule before the parse builds a tree. Bytes that are not an accepted shape
    reach the door unchanged, so the parse answers the line the shape table states for the magic-bytes row, and the
-   producer writes no refusal wording of its own. A stream with more than one member is not an accepted shape,
-   because rule 4 has no owner to print its refusal, so this piece pins no answer for it. Pinned by
+   producer writes no refusal wording of its own. A bundle with more than one XML member is read only through the
+   declaration the operator names, so a run that names none is answered by rule 4's owner, and the row for that shape
+   is measured through the rule itself. Pinned by
    `tests/test_safe_input.py::test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands`,
    `tests/test_safe_input.py::test_the_cap_stops_the_expansion_before_a_tree_is_built`, and
-   `tests/test_safe_input.py::test_the_archive_producer_opens_no_file`. The splitter's line for the shape it read is
+   `tests/test_safe_input.py::test_the_archive_producer_opens_no_file`, `tests/test_safe_input.py::test_the_checks_answer_on_the_bytes_a_declared_member_expands`, and `tests/test_safe_input.py::test_the_member_rule_states_no_check_and_no_size_rule_of_its_own`. The splitter's line for the shape it read is
    reached when the bytes the splitter sees are XML, which now includes a bundle the producer expanded, and a
    per-device export.
 2. The splitter answers through `device_associations`, so the fact it can state is the row set
@@ -92,6 +93,19 @@ owner, landed by Piece 13B.2 on 2026-11-24. Rule 4 and rule 5 are the two decisi
    declaration is held by the CLI, not by a rule owner, so no module states a member rule the CLI
    holds instead. The shape is still read from the bytes, so this decision changes no rule about
    a name.
+   Landed by Piece 13B.4 on 2026-11-25. The owner is `xml_input.read_member`, which
+   `xml_input.parse_archive` calls, so the producer adds no check and states no refusal wording of
+   its own, and the rule answers before the door is handed any bytes. The refusal is the wording
+   the table mirrors as data, and the line names no member count, because a count is a fact a pin
+   reads from the row's own content. The declaration is read through
+   `xml_input.add_member_argument` and `panorama_to_terraform.shared_arguments`, so both entry
+   points read one set, and the argument states no path rule and no naming rule of its own, and a
+   run that declares nothing is refused nothing by it. Pinned by
+   `tests/test_input_shapes.py::test_the_member_rule_line_holds_only_the_origin_as_a_measured_part`,
+   `tests/test_input_shapes.py::test_the_table_mirrors_the_member_rule_and_holds_no_wording_of_its_own`,
+   `tests/test_input_shapes.py::test_the_declaration_is_row_data_and_no_pin_holds_a_member_of_its_own`,
+   `tests/test_input_shapes.py::test_both_entry_points_print_the_same_line_for_the_same_bytes`, and
+   `tests/test_safe_input.py::test_the_member_argument_states_no_rule_an_owner_states`.
 5. **Taken 2026-11-24, landed with Piece 13B.3, the provenance bytes.** For an archive read the record names the
    decompressed bytes, because F5.3 states that the record names the bytes the door checked and rule 1 states that
    the door checks the decompressed bytes. `SourceOrigin.kind` names the archive, through `xml_input.ARCHIVE_KIND`
@@ -108,7 +122,7 @@ owner, landed by Piece 13B.2 on 2026-11-24. Rule 4 and rule 5 are the two decisi
 The table is one machine-readable table, held as data in `src/input_shapes.py`, which is its only
 owner. Each row states the byte shape, the content that shows it, the entry point that accepts it,
 the line the run prints for it, the status, the decision a pending row waits for, and the owner
-function the pins read the row through, as `SHAPE_ROW_FIELDS`. The document names the owner and
+function the pins read the row through, and the member the row is read through when the operator declares one, as `SHAPE_ROW_FIELDS`. The document names the owner and
 states the rules around the table; it holds no row, and the row wording appears in no document,
 which `tools/check_documents.py` reports. Every document that describes a shape links here.
 
@@ -118,6 +132,9 @@ which `tools/check_documents.py` reports. Every document that describes a shape 
    `state_input.parse_state`, and the console line from `container_coverage.console_line` with the fact phrase and the
    block header of the entry point that read the fact. A row names its owner in `measured_through`, and
    `tests/test_input_shapes.py` measures the row by running the row's content through that owner and comparing the
+   The pins read every row through `tests/conftest.py::shape_row` and fill the line through
+   `tests/conftest.py::shape_line` with the parts they measure, so no test module holds a row, a
+   row line, or a declaration of its own, and the table module builds no wording.
    printed line with the row. The record row's owner is the record build rule, `provenance.record_for`, so that row
    is measured by building the record the run would write for its content and reading the record back through the
    same module, because a record row states no printed line of its own. A pending row names no owner, because the
@@ -128,18 +145,22 @@ which `tools/check_documents.py` reports. Every document that describes a shape 
    `{limit}`. Every other part of a line is the row's own wording, so the pin compares the whole line. A part the
    row's own content shows — the DTD name, a parse answer, the position and the identity a console line names — is
    wording measured by running the content through the owner, so no row states a number the pins cannot read from it.
+   The member rule's line holds only `{origin}`, because the number of members a bundle holds is a
+   fact a pin reads from the row's content, so the line names no count.
 3. **The status vocabulary is two words.** `held` is a row the pins measure today; `pending` is a row whose line does
    not exist yet, and a pending row states no line, names no entry point as accepting its shape, and names the
    decision in §2 it waits for, or the piece that will give its rule an owner once the decision is taken. Both §2
-   decisions are taken, so every pending row names a piece. A decision that lands, or a line that is written for a
+   decisions are taken, and the rule that needed an owner was the member rule, so no row is pending today and the pins read the pending set as an absence: every row names a function its owner defines. A decision that lands, or a line that is written for a
+   Pinned by
+   `tests/test_input_shapes.py::test_no_row_is_pending_so_the_pins_measure_every_row_through_an_owner_they_call`.
    held shape, moves the row in the same commit. A pending row cannot be held by a decision alone, because the pins
    read a held row only through an owner function they call, and the table module states no rule an owner states.
 4. **The shape is read from the bytes**, so no row names a file name, an extension, or a committed fixture, and the
-   pins decide acceptance from the row's content under different names. The committed fixture pair (Piece 13A.3)
+   pins decide acceptance from the row's content under different names, read with the declaration the row states. The committed fixture pair (Piece 13A.3)
    shows the two shapes as two files and adds no row here, so the pins read its shape from its bytes and not from
    its name, and the pins that state the printed fixture set read the measured value, so they move with the pair.
 5. **Every entry point prints the same line for the same bytes**, which the pins measure by running both entry points
-   on one row's content. A row that names `none` as its accepted entry point is a refusal row: the entry point prints
+   on one row's content, read with the declaration the row states, so the pins pass no member name of their own. A row that names `none` as its accepted entry point is a refusal row: the entry point prints
    the refusal, and the line is that refusal. A row that names an entry point is a shape that entry point accepts, so
    the line is the fact it read, and the pins read that row through the block the entry point states rather than
    through a refusal.

@@ -1286,8 +1286,11 @@ def test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_t
         "workspace",
         "prune_cache",
         # F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): the selection names the read set, not a source, so it
-        # sits in the shared set and the entry point adds none of its own.
+        # sits in the shared set and the entry point adds none of its own. Piece 13B.4 (`docs/INPUT_SHAPES.md` §2
+        # rule 4): the member declaration names one member of a bundle, so it names no source either and sits in the
+        # same set.
         "selection",
+        "member",
     ):
         assert name in accepted, (name, "the argument one run reads")
 
@@ -1494,7 +1497,7 @@ def test_the_entry_point_states_no_rule_an_owner_states():
         ),
         "sanity_checks.py": ("run_checks", "Finding", "NOT_RUN"),
         "unit_manifest.py": ("FIELD_ORDER", "identity_digest", "directory_name", "unit_name"),
-        "source_fetch.py": ("API_KEY_ENV", "add_max_input_argument", "fetch", "ApiRequest"),
+        "source_fetch.py": ("API_KEY_ENV", "add_max_input_argument", "add_member_argument", "fetch", "ApiRequest"),
     }
     for module, names in owners.items():
         for name in names:

@@ -20,11 +20,16 @@ file is; the tests for that are at the end of this file.
 
 Piece 13B.2 adds the archive producer behind the same boundary. It adds no check, so
 the two checks run on the bytes it expands, and the read cap is applied while the bytes
-expand, so a bundle that expands past the cap is refused before a tree is built. Those
-tests are at the end of this file, with the boundary tests.
+expand, so a bundle that expands past the cap is refused before a tree is built. Piece
+13B.4 lands the member rule for a bundle that holds more than one member, `xml_input.read_member`, and the operator's
+argument for the declaration, so the checks answer on the bytes a declared member expands to, and a bundle with no
+declaration is refused before the door is handed any bytes. The rows the tests read are read as data through
+`tests/conftest.py::shape_row`, so this module holds no archive bytes, no row line, and no member name of its own.
+Those tests are at the end of this file, with the boundary tests.
 """
 
 import argparse
+import ast
 import copy
 import gzip
 import io
@@ -36,7 +41,18 @@ from pathlib import Path
 
 import pytest
 
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, parts, tf_files
+import panorama_to_terraform
+from conftest import (
+    FIXTURES_DIR,
+    SAMPLE_CONFIG,
+    SRC_DIR,
+    file_text,
+    parts,
+    printed_refusal,
+    shape_line,
+    shape_row,
+    tf_files,
+)
 
 # The layout rule (`docs/ARCHITECTURE.md` §1.1): the entry points are tool modules, so the test reads them
 # from the `src/` namespace, through the paths conftest builds once.
@@ -373,6 +389,13 @@ def test_parser_and_splitter_use_the_shared_default(
     assert splitter_module.DEFAULT_MAX_INPUT_BYTES == xml_input_module.DEFAULT_MAX_INPUT_BYTES
     assert fetch_module.DEFAULT_MAX_INPUT_BYTES == xml_input_module.DEFAULT_MAX_INPUT_BYTES
 
+    # Piece 13B.4 (`docs/INPUT_SHAPES.md` §2 rule 4): the declaration is plumbed through the producer, so neither
+    # entry point states a member rule of its own.
+    for module in ("panorama_to_terraform.py", "split_device_groups.py"):
+        text = (SRC_DIR / module).read_text(encoding="utf-8")
+        assert "args.member" in text, (module, "the entry point passes the declaration its argument read")
+        assert "read_member(" not in text, (module, "the entry point states no member rule")
+
     # A DTD reaches both entry points through the one check.
     source = tmp_path / "dtd.xml"
     source.write_bytes(f'<?xml version="1.0"?>\n<!DOCTYPE config>\n{BODY}'.encode())
@@ -623,8 +646,8 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
     checks run on those bytes and not on the compressed stream. The origin the door gets
     for an accepted read names the archive, through the kind the producer states, so the
     record reads one definition of the kind for both shapes: the accepted single-member
-    stream names the archive, and the two-member stream the producer does not accept keeps
-    the kind its producer states.
+    stream names the archive, and a bundle the member rule refuses never reaches the door,
+    so the door states no kind for it.
     """
     source = tmp_path / "in.xml"
     data = f'<?xml version="1.0"?>\n{BODY}'.encode()
@@ -654,17 +677,22 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
     assert parsed.origin.member is None, "a stream that states no name leaves the origin stating no member"
     assert parsed.root.tag == "config", "the door parsed the bytes the producer expanded"
 
-    # A shape the producer does not accept keeps the kind its producer states, because no member was read for it. The
-    # two-member stream is not an accepted shape, so the bytes reach the door unchanged and the parse answers them.
+    # A bundle that holds more than one member and states no declaration is refused by the member rule, so the door
+    # is handed nothing for it: the rule answers before the read reaches the checks. The line is the row's wording
+    # read as data through `tests/conftest.py::shape_row`, so this module holds no refusal wording of its own, and
+    # the pins print the answer through the entry point's own print site.
     two = tmp_path / "two.bin"
     two.write_bytes(_one_member(data) + _one_member(data))
     calls.clear()
-    with pytest.raises(ET.ParseError):
-        xml_input_module.parse_xml(two)
-    assert calls == [(len(two.read_bytes()), "file", two.name)], (
-        calls,
-        "a shape the producer did not expand keeps the kind its producer states",
+    proc = _run(CONVERTER, str(two), "--output-dir", str(tmp_path / "out"), workdir=tmp_path)
+    _assert_clean_failure(proc)
+    assert calls == [], (calls, "the member rule answered before the door was handed any bytes")
+    row = shape_row("a bundle that holds more than one XML member, refused when the operator names no member")
+    line = row["printed_line"].format(
+        origin=xml_input_module.origin_phrase(xml_input_module.SourceOrigin.for_path(two))
     )
+    assert _error_text(proc) == line, (proc.stdout, "the printed line is the row's wording")
+    assert row["member"] == "", "the run states no declaration, which is the shape the row shows"
 
 
 def test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands(xml_input_module, monkeypatch):
@@ -743,3 +771,137 @@ def test_the_archive_producer_opens_no_file(xml_input_module, monkeypatch):
         parsed = xml_input_module.parse_archive(shape, origin)
         assert parsed.root.tag == "config"
     assert opened == [], "the producer opened nothing"
+
+
+def test_the_checks_answer_on_the_bytes_a_declared_member_expands(xml_input_module, monkeypatch):
+    """Piece 13B.4 (`docs/INPUT_SHAPES.md` §2 rule 4): the two checks answer on the bytes the declared member expands
+    to, so a bundle read through a declaration is checked the way a single-member stream is. The pins read the rows as
+    data through `tests/conftest.py::shape_row` and fill only the parts they measure, so this module holds no archive
+    bytes, no refusal wording and no member name of its own, and the door is recorded through its own reference. The
+    DTD row answers with the door's line for the bytes the member holds; the size row answers at the cap the read step
+    already states, so the refusal can only come from the expansion of the member the row names.
+    """
+    origin = _api_origin(xml_input_module)
+    dtd_bytes = shape_row("XML bytes that declare a DTD in the prolog")
+    real_check = xml_input_module.check_bytes
+    handed = []
+
+    def recording(handed_bytes, source, limit):
+        handed.append(len(handed_bytes))
+        return real_check(handed_bytes, source, limit)
+
+    monkeypatch.setattr(xml_input_module, "check_bytes", recording)
+    dtd_row = shape_row("a DTD inside a declared member of a bundle that holds more than one member")
+    with pytest.raises(xml_input_module.UnsafeInputError) as raised:
+        xml_input_module.parse_archive(
+            dtd_row["content"], origin, xml_input_module.DEFAULT_MAX_INPUT_BYTES, dtd_row["member"]
+        )
+    assert handed == [len(dtd_bytes["content"])], (handed, "the door checks the bytes the member expands to")
+    assert printed_refusal(raised.value) == shape_line(
+        dtd_row, origin, handed[-1], xml_input_module.DEFAULT_MAX_INPUT_BYTES
+    ), (
+        dtd_row["shape"],
+        "the printed line is the row's wording",
+    )
+
+    handed.clear()
+    cap = 120
+    size_row = shape_row(
+        "the bytes a declared member expands to, past the input limit, refused while the cap is applied during "
+        "decompression"
+    )
+    with pytest.raises(xml_input_module.UnsafeInputError) as raised:
+        xml_input_module.parse_archive(size_row["content"], origin, cap, size_row["member"])
+    assert handed == [cap + 1], (handed, "the cap stopped the expansion of the declared member")
+    assert printed_refusal(raised.value) == shape_line(size_row, origin, handed[-1], cap), (
+        size_row["shape"],
+        "the printed line is the row's wording",
+    )
+
+
+def test_the_member_rule_states_no_check_and_no_size_rule_of_its_own(xml_input_module):
+    """Piece 13B.4 (`docs/INPUT_SHAPES.md` §2 rule 4, read as an absence): the member rule decides which member a run
+    reads and states no check, so `check_bytes` stays the one definition of the two checks and the read cap stays the
+    count the read step already states. The rule reads the members by name, so it states no selection by order, which
+    the determinism rule (`docs/ARCHITECTURE.md` §6) keeps refused, and it states no argument rule, because the
+    declaration is the operator's argument held by the CLI. A declared member the bundle does not hold answers None,
+    so the producer hands the bytes to the door unchanged and the parse answers the line the row holds for them.
+    """
+    tree = ast.parse((SRC_DIR / "xml_input.py").read_text(encoding="utf-8"))
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+    rule = functions["read_member"]
+    for name in ("check_bytes", "read_input", "reject_dtd", "parse_bytes"):
+        assert name not in [getattr(node.func, "id", "") for node in ast.walk(rule) if isinstance(node, ast.Call)], (
+            name,
+            "the rule runs no check an owner states",
+        )
+    assert not [
+        node for node in ast.walk(rule) if isinstance(node, ast.Compare) and "max_input_bytes" in ast.dump(node)
+    ], (rule, "the rule states no size comparison of its own: it passes the cap through")
+    origin = _api_origin(xml_input_module)
+    row = shape_row("a declared member the bundle does not hold, so the producer reads no member")
+    assert (
+        xml_input_module.read_member(row["content"], origin, xml_input_module.DEFAULT_MAX_INPUT_BYTES, row["member"])
+        is None
+    ), (
+        row["shape"],
+        "a member the bundle does not hold reads no member",
+    )
+    for word in ("sorted", "index", "pop"):
+        assert word not in ast.dump(rule), (word, "the rule reads the members by name and never by position")
+
+
+def _argument_rule(name: str) -> str:
+    """One argument rule, read as source through the module that owns it, so the pins read the argument and not the
+    document around it."""
+    text = (SRC_DIR / "xml_input.py").read_text(encoding="utf-8")
+    tree = ast.parse(text)
+    function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == name)
+    return ast.get_source_segment(text, function)
+
+
+def test_the_member_argument_states_no_rule_an_owner_states(xml_input_module, tmp_path):
+    """Piece 13B.4 (`docs/INPUT_SHAPES.md` §2 rule 4): `--member` names one member of a bundle, so it states no path
+    rule and no naming rule of its own, following the shape of the input limit's argument, and it decides nothing an
+    owner decides: the run reads the shape through `xml_input.read_member`, the rule's owner. The flag is in the set
+    both entry points read, so an entry point adds no argument rule of its own, and a run that declares nothing is
+    refused nothing by the argument: the argument answers None and the run reads the one member a bundle holds.
+    """
+    argument = _argument_rule("add_member_argument")
+    for rule in (
+        "Path",
+        "suffix",
+        "resolve",
+        "sanitize",
+        "name_ref",
+        "open(",
+        "print(",
+        "read_member(",
+        "check_bytes(",
+    ):
+        assert rule not in argument, (rule, "the argument states no rule of this kind")
+    for word in ("unit", "directory", "split", "layout", "flat"):
+        assert word not in argument, (word, "the flag names no layout word")
+
+    # The argument decides nothing an owner decides, and a run that declares nothing is refused nothing by it: the
+    # argument answers None, the rule reads the one member a bundle holds, and the run writes no file.
+    parser = argparse.ArgumentParser()
+    xml_input_module.add_member_argument(parser)
+    plain = parser.parse_args([])
+    assert plain.member is None, "a run that declares no member reads the one member a bundle holds"
+    one = _one_member(b"<config/>")
+    assert xml_input_module.read_member(
+        one, _api_origin(xml_input_module), xml_input_module.DEFAULT_MAX_INPUT_BYTES, None
+    ) == (None, b"<config/>"), ("a bundle that holds one member is read without a declaration",)
+
+    # The flag sits in the set both entry points read, so neither states an argument rule of its own.
+    shared = argparse.ArgumentParser()
+    panorama_to_terraform.shared_arguments(shared)
+    assert shared.parse_args([]).member is None, "both entry points read the same set"
+    assert "source_fetch.add_member_argument" in (SRC_DIR / "panorama_to_terraform.py").read_text(encoding="utf-8"), (
+        "the entry points read the argument through the module that owns the member rule"
+    )
+    assert "add_member_argument(" in (SRC_DIR / "split_device_groups.py").read_text(encoding="utf-8"), (
+        "the splitter reads the same argument rule"
+    )
+    assert not (tmp_path / "out").exists(), "the argument reads no file and writes none"

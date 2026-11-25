@@ -5,18 +5,22 @@ Seven rules, stated once here. The table is data, so a document links to it and 
 (`docs/INPUT_SHAPES.md` §3), and `tests/test_input_shapes.py` measures every held row against the door.
 
 1. **One row shape** (`SHAPE_ROW_FIELDS`): the byte shape, the content that shows it, the entry point that accepts
-   it, the line the run prints for it, the status, the decision or the piece a pending row waits for, and the owner
-   function the pins read the row through. A row is one shape, so a shape two entry points answer differently is two
-   rows.
+   it, the line the run prints for it, the status, the decision or the piece a pending row waits for, the owner
+   function the pins read the row through, and the member the row is read through when the operator declares one. A
+   row is one shape, so a shape two entry points answer differently is two rows. A row that states no declaration
+   states `""`, so the pins read the declaration as row data and hold none of their own, and only a row read through
+   the archive producer states one.
 2. **The module states no check and no reader.** The two byte checks stay `xml_input.check_bytes`, and the parse
    step is chosen by the source kind in `xml_input.py` and `state_input.py`, so this module adds no third kind, no
    size rule, no DTD rule, no parser, no writer, no console line, no naming rule, no environment name, and no
    control-character set. It names no file, no path, and no fixture: the shape is read from the bytes, which is the
    shape the DTD rule already has, because that check asks the parser and not a text search.
-3. **The lines are the owners' wording, mirrored as data.** The door's wording is `xml_input.py`'s, the state
-   door's is `state_input.py`'s, and the shape a run prints for a refusal is `panorama_to_terraform.refused`. The
-   pins build each line through its owner and compare it with the row, so a mirror cannot drift from the module that
-   states the rule. A part of a line the pins measure is written as a placeholder the pins fill with what they read:
+3. **The lines are the owners' wording, mirrored as data.** The door's wording is `xml_input.py`'s, the member
+   rule's is `xml_input.read_member`'s, the state door's is `state_input.py`'s, and the shape a run prints for a
+   refusal is `panorama_to_terraform.refused`. The pins build each line through its owner and compare it with the
+   row, so a mirror cannot drift from the module that states the rule. A row states no count the pins cannot read
+   from its own content, so the member rule's line names no member count. A part of a line the pins measure is
+   written as a placeholder the pins fill with what they read:
    `{origin}`, `{size}`, `{limit}`. A part the row's own content states, such as the DTD name, is written as data, so
    the pin compares the whole line. A console line row holds the parts in the order the shape states them, without the
    prefix, because the prefix belongs to `container_coverage`, which is the module that states the shape, and the pin
@@ -53,6 +57,7 @@ SHAPE_ROW_FIELDS = (
     "status",
     "pending_on",
     "measured_through",
+    "member",
 )
 
 # The status vocabulary, stated once here, so a pin can tell a row it measures from a row that waits.
@@ -70,6 +75,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_bytes",
+        "member": "",
     },
     {
         "shape": "a `<!DOCTYPE` that only appears in a prolog comment",
@@ -79,6 +85,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_bytes",
+        "member": "",
     },
     {
         "shape": "a JSON state document that reads as one object with a `resources` array",
@@ -88,6 +95,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "state_input.parse_state",
+        "member": "",
     },
     {
         "shape": "a `<!DOCTYPE` inside a JSON value, where no prolog exists for the check to read",
@@ -97,6 +105,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "state_input.parse_state",
+        "member": "",
     },
     {
         "shape": "the firewall export shape, `devices/entry` with no `device-group` row",
@@ -106,6 +115,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_bytes",
+        "member": "",
     },
     {
         "shape": "more bytes than the input limit, handed by a producer",
@@ -116,6 +126,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.check_bytes",
+        "member": "",
     },
     {
         "shape": "more bytes than the input limit, read through the file producer",
@@ -126,6 +137,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.read_input",
+        "member": "",
     },
     {
         "shape": "XML bytes that declare a DTD in the prolog",
@@ -136,6 +148,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.check_bytes",
+        "member": "",
     },
     {
         "shape": "a DTD that states an external id, the XXE shape",
@@ -146,6 +159,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.check_bytes",
+        "member": "",
     },
     {
         "shape": "a DTD in an encoding a text search cannot read, the UTF-16 shape",
@@ -156,6 +170,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.check_bytes",
+        "member": "",
     },
     {
         "shape": "bytes the parser cannot read as one XML document, the magic bytes of a compressed member",
@@ -165,6 +180,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_bytes",
+        "member": "",
     },
     {
         "shape": "an entity reference with no DTD that declares it",
@@ -174,6 +190,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_bytes",
+        "member": "",
     },
     {
         "shape": "a control character the read layer refuses, as a raw byte inside XML content",
@@ -183,6 +200,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_bytes",
+        "member": "",
     },
     {
         "shape": "a control character the read layer refuses, inside a JSON value",
@@ -193,6 +211,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "state_input.parse_state",
+        "member": "",
     },
     {
         "shape": "a resource that names no type or no name, so the identity key cannot read it",
@@ -203,6 +222,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "state_input.parse_state",
+        "member": "",
     },
     {
         "shape": "the splitter reading the firewall export shape, the fact it prints for it",
@@ -212,6 +232,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "split_device_groups.console_lines",
+        "member": "",
     },
     {
         "shape": "a gzip stream that holds exactly one member, read through the archive producer",
@@ -226,6 +247,7 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_archive",
+        "member": "",
     },
     {
         "shape": "a gzip stream that holds a tar archive with exactly one member, read through the archive producer",
@@ -243,6 +265,25 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_archive",
+        "member": "",
+    },
+    {
+        "shape": "a bundle that holds more than one XML member, read through a declared member",
+        # Two members, and the row declares the first, whose content is the accepted row's content, so the pins read
+        # the bytes the door checks as another row shows them and hold no content of their own.
+        "content": (
+            b"\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xfffirst\x00\xb3\xb1\xaf\xc8\xcdQ(K-*\xce"
+            b"\xcc\xcf\xb3U2\xd43P\xb2\xb7\xe3\xb2I\xce\xcfK\xcbL\xb7\xb3I\xcd+)\xaaT\xc8K\xcc"
+            b"M\xb5U\xca\xc8/.\xd15T\xd2\xb7\xb3\xd1\x87J\x03\x00Q\x9d:\xd2=\x00\x00\x00\x1f"
+            b"\x8b\x08\x08\x00\x00\x00\x00\x02\xffsecond\x00\xb3I\xce\xcfK\xcbL\xd7\xb7\x03\x00"
+            b"\x11\x10\xd1\xf1\t\x00\x00\x00"
+        ),
+        "entry_point": "every entry point",
+        "printed_line": "",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
+        "member": "first",
     },
     {
         "shape": (
@@ -262,15 +303,79 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "xml_input.parse_archive",
+        "member": "",
+    },
+    {
+        "shape": (
+            "the bytes a declared member expands to, past the input limit, refused while the cap is applied during "
+            "decompression"
+        ),
+        # The content is under the limit the pins measure this row against and the declared member expands past it, so
+        # the refusal can only come from the expansion of the member the row names. The pins read the row through the
+        # producer, which is where the cap is applied.
+        "content": (
+            b"\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xfffirst\x00st\x1c<\x00\x00\x9fX\x87*\x8c"
+            b"\x00\x00\x00\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xffsecond\x00\xb3I\xce\xcfK\xcb"
+            b"L\xd7\xb7\x03\x00\x11\x10\xd1\xf1\t\x00\x00\x00"
+        ),
+        "entry_point": "none",
+        "printed_line": "Error: refusing to read {origin}: the input is larger than the limit, which exceeds the "
+        "input limit of {limit} bytes. Pass --max-input-bytes N to raise the limit for a trusted file.",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
+        "member": "first",
+    },
+    {
+        "shape": "a DTD inside a declared member of a bundle that holds more than one member",
+        # The declared member holds the DTD row's content, so the pins read the answer as the DTD line on the bytes
+        # the member expands to, and the other member only shows that the bundle holds more than one.
+        "content": (
+            b"\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xfffirst\x00\xb3\xb1\xaf\xc8\xcdQ(K-*\xce"
+            b"\xcc\xcf\xb3U2\xd43P\xb2\xb7\xe3\xb2Qt\xf1w\x0e\x89\x0cpUH\xce\xcfK\xcbL\x07\x8a"
+            b"@\x196\xa9y%E\x95\ny\x89\xb9\xa9\xb6J\x19\xf9\xc5%\xba\x86J\xfav6\xfaPi\x00\xc8"
+            b"O\xee\xdeO\x00\x00\x00\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xffsecond\x00\xb3I\xce"
+            b"\xcfK\xcbL\xd7\xb7\x03\x00\x11\x10\xd1\xf1\t\x00\x00\x00"
+        ),
+        "entry_point": "none",
+        "printed_line": "Error: refusing to parse {origin}: the input declares a DTD for 'config', which a Panorama "
+        "export never includes. A DTD can expand entities without bound or name a file to read.",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
+        "member": "first",
     },
     {
         "shape": "a bundle that holds more than one XML member, refused when the operator names no member",
-        "content": b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x00not xml",
+        # Two members, each the smallest XML body, so the count the member rule reads is two and the row states no
+        # declaration. The flags byte names the name field, so each member names itself.
+        "content": (
+            b"\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xfffirst\x00\xb3I\xce\xcfK\xcbL\xd7\xb7\x03"
+            b"\x00\x11\x10\xd1\xf1\t\x00\x00\x00\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xffseco"
+            b"nd\x00\xb3I\xce\xcfK\xcbL\xd7\xb7\x03\x00\x11\x10\xd1\xf1\t\x00\x00\x00"
+        ),
         "entry_point": "none",
-        "printed_line": "",
-        "status": "pending",
-        "pending_on": "Piece 13B.4",
-        "measured_through": "",
+        "printed_line": "Error: refusing to read {origin}: the bundle holds more than one member and the run "
+        "declares none. Pass --member NAME to read one.",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
+        "member": "",
+    },
+    {
+        "shape": "a declared member the bundle does not hold, so the producer reads no member",
+        # One member, named first, and the row declares a name the bundle does not hold, so the bytes reach the door
+        # unchanged and the parse answers them with the line the table already holds for the magic bytes.
+        "content": (
+            b"\x1f\x8b\x08\x08\x00\x00\x00\x00\x02\xfffirst\x00\xb3I\xce\xcfK\xcbL\xd7\xb7\x03"
+            b"\x00\x11\x10\xd1\xf1\t\x00\x00\x00"
+        ),
+        "entry_point": "none",
+        "printed_line": "Error: Failed to parse XML file: not well-formed (invalid token): line 1, column 0",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "xml_input.parse_archive",
+        "member": "second",
     },
     {
         "shape": "the decompressed bytes an archive read names in the provenance record",
@@ -286,5 +391,6 @@ SHAPE_TABLE = (
         "status": "held",
         "pending_on": "",
         "measured_through": "provenance.record_for",
+        "member": "",
     },
 )

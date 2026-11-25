@@ -7176,7 +7176,9 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
 
     The set names no source, because the request set is the scope set and the parent walk stays inside one
     response (F8.5): no input file, no `--source`, no `--path`, no `--parent`. Path 1 adds the source
-    arguments of its own. The input limit is the door's rule, read through `source_fetch`.
+    arguments of its own. The input limit is the door's rule, read through `source_fetch`, and the member
+    declaration is the other argument here that reads a fact through its owner: it names one member of a bundle, so
+    it names no source, and the run reads the shape through `xml_input.read_member`.
 
     F11.1 (`docs/MULTI_RUN_CODEBASE.md` §2 rule 1): `--selection` names the run's read set, not what the run
     writes, so it names no source and sits in the set both entry points read. The run's unit set stays
@@ -7247,6 +7249,10 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
     )
     # F3.8: the same input limit on both entry points, through the door's own argument rule.
     source_fetch.add_max_input_argument(parser)
+    # Piece 13B.4 (`docs/INPUT_SHAPES.md` §2 rule 4): the member declaration is the operator's argument, so it sits
+    # in the set both entry points read and is read through the module that owns the member rule. It names no source
+    # and decides nothing an owner decides, and a run that declares nothing reads the one member a bundle holds.
+    source_fetch.add_member_argument(parser)
 
 
 def shared_checks(parser: argparse.ArgumentParser, args) -> None:
@@ -7844,7 +7850,7 @@ def main():
     try:
         if args.source == "file":
             print(f"Parsing Panorama configuration from {args.input_file}...")
-            parts = [part_for(parse_xml(args.input_file, args.max_input_bytes), None)]
+            parts = [part_for(parse_xml(args.input_file, args.max_input_bytes, args.member), None)]
         else:
             # F5.2: the producer hands bytes to the door, and the cache entry is what gets parsed, so the
             # run names the entry it read.

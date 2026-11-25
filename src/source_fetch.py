@@ -97,6 +97,8 @@ from xml_input import (
     UnsafeInputError,
     add_max_input_argument,  # noqa: F401 -- re-exported: the entry points read the input limit through
     # this module, the owner of the limit, so no entry point states its own.
+    add_member_argument,  # noqa: F401 -- re-exported: the entry points read the member declaration through this
+    # module, the owner of the member rule, so no entry point states its own argument rule.
     parse_bytes,
     read_input,
 )

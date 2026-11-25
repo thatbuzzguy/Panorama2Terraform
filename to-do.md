@@ -8,22 +8,9 @@ piece are in `acceptance.md`, with pointers to the Epic 13 and Epic 14 records.
 ## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
 
 Planned in the `input-shapes` worktree, 2026-11-23. The decisions are in `PLAN.md`, the criteria
-are in `acceptance.md`, and the live facts are in `backlog.md`. Phase 13A is complete as of 2026-11-24, so its
-pieces are in the git history. Phase 13B's two decisions are taken on 2026-11-24, so each remaining piece needs the
-owner its rule states, and Phase 13C needs no decision.
-
-### Phase 13B, the archive producer
-
-Piece 13B.2 landed the owner its rule states, `xml_input.parse_archive`, on 2026-11-24, and Piece 13B.3 landed the
-record facts the same day through `provenance.record_for`, so the accepted shape rows, the decompression row and the
-record row are held and measured through their owners. The record names the decompressed bytes, `SourceOrigin.kind`
-names the archive through `xml_input.ARCHIVE_KIND`, and the member name is the field the file case does not have; the
-cache rule reads through `source_fetch.py`, so it states no archive rule of its own. Each remaining piece still needs
-its own owner: the pending row in `src/input_shapes.py` names Piece 13B.4. The member declaration is an operator
-argument held by the CLI, not by a rule owner, so it lands with the CLI argument rule that Piece 13B.4 writes.
-- **13B.4** — the pins: both checks run on the decompressed bytes through the door, no producer bypasses them, and
-  the archive path adds a producer and no check. The member rule's owner, and the refusal it prints for a bundle with
-  no declaration, land with this piece.
+are in `acceptance.md`, and the live facts are in `backlog.md`. Phase 13A is complete as of 2026-11-24 and Phase 13B
+as of 2026-11-25, so their pieces are in the git history. Every shape row names an owner the pins call, so no row is
+pending, and Phase 13C needs no decision.
 
 ### Phase 13C, the documents
 

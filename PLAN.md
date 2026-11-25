@@ -108,12 +108,12 @@ Two more decisions, taken 2026-11-24, are in the design record §2:
    that already states it, `source_fetch.py` (`docs/ARCHITECTURE.md` §3.3), so no rule is stated twice, and the
    condition that differs is the measurement in the design record §1 fact 6.
 
-Decision 2 landed 2026-11-24 with Piece 13B.2, through `xml_input.parse_archive`, so the cap is applied while the
-bytes expand and the accepted shape rows and the decompression row are held, measured through the producer. Decision 5
-landed the same day with Piece 13B.3, through `provenance.record_for` and the origin the producer states, so the
-record row is held and measured through the record build rule. The shape table has its owner module since Piece 13A.1,
-so each rule that still needs an owner is a pending row that names the piece, and a decision that is taken moves its
-row in the same commit. Decision 4's refusal still has no owner, so its row stays pending until Piece 13B.4 writes it.
+The three rules the decisions name have owners. `xml_input.parse_archive` is the producer behind the
+door, so the cap is applied while the bytes expand; `provenance.record_for` builds the record for the bytes the door
+checked, through the origin the producer states; and `xml_input.read_member` decides which member a run reads, with
+the declaration held by the CLI argument `xml_input.add_member_argument`. The shape table has its owner module,
+`src/input_shapes.py`, so a decision that is taken moves its row in the same commit, and no row is pending today:
+every row names a function its owner defines.
 Measured on three legs of the "XML and XPath" page — the 9.1 (EoL) leg and the 11.1 & Later leg on 2026-11-23,
 and the 10.2 leg on 2026-11-24 — the node model and the entry shape are the same on each, so the read layer agrees
 with the documented shape on all three. The 10.2 leg was read through a stored capture, because its live address

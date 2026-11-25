@@ -68,6 +68,7 @@ from xml_input import (
     ParsedSource,
     UnsafeInputError,
     add_max_input_argument,
+    add_member_argument,
     parse_xml,
     read_text,
 )
@@ -331,13 +332,19 @@ def extract_device_group_config(source: ParsedSource, row: dict, join: dict) -> 
     return config
 
 
-def split_panorama_config(input_file: str, output_dir: str = None, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES):
+def split_panorama_config(
+    input_file: str,
+    output_dir: str = None,
+    max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES,
+    member: str | None = None,
+):
     """Split Panorama configuration by device group"""
     # F3.8: the same safe read as the converter - a capped input size and a
     # parser-level DTD refusal. Nothing is written before it succeeds. F4.2: the read
-    # also records the source line, which is what the tables key by.
+    # also records the source line, which is what the tables key by. The member declaration is read through the
+    # producer, so this states no member rule of its own.
     try:
-        source = parse_xml(input_file, max_input_bytes)
+        source = parse_xml(input_file, max_input_bytes, member)
     except UnsafeInputError as e:
         print(f"Error: {e}")
         return False
@@ -428,8 +435,9 @@ Use Case:
 
     parser.add_argument("input_file", help="Panorama XML export file")
     parser.add_argument("--output-dir", "-o", help="Output directory for split configs")
-    # F3.8: the same input limit on both entry points.
+    # F3.8: the same input limit on both entry points, and the same member declaration.
     add_max_input_argument(parser)
+    add_member_argument(parser)
 
     args = parser.parse_args()
 
@@ -437,7 +445,7 @@ Use Case:
         print(f"Error: Input file not found: {args.input_file}")
         return 1
 
-    success = split_panorama_config(args.input_file, args.output_dir, args.max_input_bytes)
+    success = split_panorama_config(args.input_file, args.output_dir, args.max_input_bytes, args.member)
 
     return 0 if success else 1
 

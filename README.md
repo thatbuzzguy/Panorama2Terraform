@@ -351,13 +351,16 @@ different questions.
   and extract the XML. A snapshot saved on a managed device gives the device shape above.
 - **API:** `curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml`
 
-A `.tar.gz` or `.gz` file is not an accepted input. `src/xml_input.py` is the only input read and
-no producer decompresses, so archive bytes reach the parse as raw bytes and the parse answers the
-line the input shape table states for the magic-bytes row ([`src/input_shapes.py`](src/input_shapes.py)).
-Extract the XML member first. The UI export of technical
-support data is a bundle, not a configuration export. Reading an archive through the input
-boundary is planned in Epic 13 ([docs/INPUT_SHAPES.md](docs/INPUT_SHAPES.md)); until that piece
-lands, extract first.
+`src/xml_input.py` is the only input read, and its archive producer expands one accepted member: a
+single-member gzip, and a gzip stream that holds a tar archive with exactly one member. The two checks
+run on the bytes the producer expanded, and the read cap is applied while the bytes expand. A bundle
+that holds more than one member is read only when the operator names which member with `--member`; a
+run that declares nothing is refused for it, and no member can be chosen by order, because the
+determinism rule ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §6) keeps that refused. The line the run
+prints for each shape is the row's wording in the input shape table
+([`src/input_shapes.py`](src/input_shapes.py)), and the rules are in
+[docs/INPUT_SHAPES.md](docs/INPUT_SHAPES.md). The UI export of technical support data is a bundle, not a
+configuration export.
 
 The converter can also read the API response itself (`--source api --host panorama`),
 which fetches over https and keeps a cached copy. The response is an envelope
@@ -555,7 +558,9 @@ Input and the read layer:
 
 - `tests/test_safe_input.py` - the two byte checks at the door, both entry points, and the shape a refusal
   takes, including the archive producer, which adds no check, runs the checks on the bytes it expanded, and applies
-  the cap while the bytes expand
+  the cap while the bytes expand, and the member rule, which answers before the door is handed any bytes for a bundle
+  with no declaration, runs the checks on the bytes a declared member expands to, and states no rule the CLI holds
+  instead
 - `tests/test_source_fetch.py` - the api producer: bytes handed to the shared door, the response wrapper, the
   key-free cache name, `--offline`, the https rules, and the key from the environment. No test calls the
   network, and the committed response set is read through an injected producer
@@ -566,8 +571,9 @@ Input and the read layer:
   rule an owner states, each held refusal row measured through the owner its row names, the one held console line row
   measured through the block its owner states with the prefix read through `container_coverage`, the accepted rows
   through the shared read rule and the archive producer, the decompression row measured against the limit that sits
-  between its content and what its content expands to, and the pending rows stating no line and naming the piece that
-  will state their lines
+  between its content and what its content expands to, the rows read through a declared member, and no row being
+  pending, so every row names an owner the pins call. The rows are read as data through `tests/conftest.py`, so no
+  test module holds a row, a row line, or a declaration of its own
 - `tests/test_parse_helpers.py` - the six value readers call the read layer's whitespace rule, and an absent
   element answers `None`
 

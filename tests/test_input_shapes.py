@@ -4,15 +4,16 @@
 restates no row (`docs/INPUT_SHAPES.md` §3). These pins measure the table in four directions:
 
 - the table is data: every row has the one row shape `SHAPE_ROW_FIELDS`, and the pins define no row shape, no row,
-  and no content of their own;
+  no content and no row wording of their own; every row is read through `tests/conftest.py::shape_row`, so no test
+  module holds a row reader of its own;
 - the module states no rule an owner states, so the table is a mirror and not a second definition;
 - every held refusal row is measured through the owner function the row names, and the line the entry point prints
   for its content is the wording the row states, which is what stops a mirror drifting from its owner;
 - the one held row that states a console line is measured through the block its owner states, read with the prefix
   through the module that owns the shape, because a console line row is the fact an entry point read rather than a
   refusal;
-- every accepted row answers no refusal when the shared read rule reads its content, and every pending row reads no
-  owner today, so the table prints nothing for it and each pending row names the piece that will state its line;
+- every accepted row answers no refusal when the shared read rule reads its content, and no row is pending today, so
+  the table states no line a pin cannot measure;
 - the record row is measured through the record build rule its owner names, and the record it builds is read back
   through `provenance.parse_record`, because a row is held only when a pin can call its owner;
 - the archive rows are read through the producer the table names, so the pins measure the shape from the bytes, and
@@ -27,8 +28,6 @@ console line and no second record rule.
 """
 
 import ast
-import contextlib
-import io
 from pathlib import Path
 
 import pytest
@@ -42,7 +41,7 @@ import source_fetch
 import split_device_groups
 import state_input
 import xml_input
-from conftest import FIXTURES_DIR, SRC_DIR, input_refusal, run_script
+from conftest import FIXTURES_DIR, SRC_DIR, TESTS_DIR, input_refusal, printed_refusal, run_script, shape_line, shape_row
 
 # The owners the rows name. A row names its owner as a function, the pins resolve the name and call it, so the pins
 # hold no reader of their own.
@@ -70,10 +69,14 @@ EXPANSION_LIMIT = 120
 MEASURED_PARTS = ("origin", "size", "limit")
 
 # The rows the entry-point pins read: one for the refusal shape and one for the parse shape, because the two kinds
-# `panorama_to_terraform.is_refusal` states print in two different shapes.
+# `panorama_to_terraform.is_refusal` states print in two different shapes, and the two member rows, because one of
+# them is refused with no declaration and the other is refused through the declaration the row states, so the pins
+# read the declaration as row data and hold none of their own.
 ENTRY_POINT_ROWS = (
     "XML bytes that declare a DTD in the prolog",
     "bytes the parser cannot read as one XML document, the magic bytes of a compressed member",
+    "a bundle that holds more than one XML member, refused when the operator names no member",
+    "a declared member the bundle does not hold, so the producer reads no member",
 )
 
 
@@ -84,13 +87,6 @@ def _rows(status: str, states_line: bool | None = None) -> list[dict]:
     return [
         row for row in input_shapes.SHAPE_TABLE if row["status"] == status and bool(row["printed_line"]) == states_line
     ]
-
-
-def _row(name: str) -> dict:
-    """One row, by the shape it states."""
-    rows = [row for row in input_shapes.SHAPE_TABLE if row["shape"] == name]
-    assert len(rows) == 1, (name, "the table states each shape once")
-    return rows[0]
 
 
 def _refusal_rows() -> list[dict]:
@@ -128,20 +124,26 @@ def _limit(row: dict) -> int:
 
 
 def _answer(row: dict, path: Path) -> Exception | None:
-    """What the row's owner answers for the row's content: the refusal it raises, or None when it accepts."""
+    """What the row's owner answers for the row's content: the refusal it raises, or None when it accepts.
+
+    A row that states a declaration is read with the row's own declaration, so the pins read the declaration as row
+    data and hold no member name of their own.
+    """
     reader = _owner(row)
     try:
         if reader is xml_input.read_input:
             path.write_bytes(row["content"])
             reader(path, _limit(row))
-        elif reader in (xml_input.check_bytes, xml_input.parse_archive):
-            # The producer and the door take the limit the pins measure the row against, because the row states a
-            # size line. Every other owner is called with the content and the origin alone.
+        elif reader is xml_input.check_bytes:
+            # The door takes the limit the pins measure the row against, because the row states a size line.
             reader(row["content"], _origin(path), _limit(row))
+        elif reader is xml_input.parse_archive:
+            # The producer takes the limit and the declaration the row states.
+            reader(row["content"], _origin(path), _limit(row), row["member"] or None)
         elif reader is provenance.record_for:
             # The record build rule takes a source, not bytes, so the pins hand it the source the producer returned
             # for the row's content and the request the run read, which is None for the producer this row shows.
-            reader(xml_input.parse_archive(row["content"], _origin(path)), None)
+            reader(xml_input.parse_archive(row["content"], _origin(path), _limit(row), row["member"] or None), None)
         else:
             reader(row["content"], _origin(path))
     except Exception as error:  # The two refusal kinds the door states, and no other kind.
@@ -150,20 +152,9 @@ def _answer(row: dict, path: Path) -> Exception | None:
 
 
 def _line(row: dict, path: Path) -> str:
-    """The row's own wording with the measured parts filled in. Only the origin and the byte counts are the pins'."""
-    return row["printed_line"].format(
-        origin=xml_input.origin_phrase(_origin(path)),
-        size=len(row["content"]),
-        limit=_limit(row),
-    )
-
-
-def _printed(error: Exception) -> str:
-    """The line the run prints for one refusal, captured from the entry point's own print site."""
-    buffer = io.StringIO()
-    with contextlib.redirect_stdout(buffer):
-        assert panorama_to_terraform.refused(error) == 1, "a refusal exits 1"
-    return buffer.getvalue().strip()
+    """The row's own wording with the measured parts filled in, through `tests/conftest.py::shape_line`. Only the
+    origin and the byte counts are the pins' own measurements."""
+    return shape_line(row, _origin(path), len(row["content"]), _limit(row))
 
 
 def _placeholders(row: dict) -> set[str]:
@@ -201,16 +192,13 @@ def test_the_table_is_data_with_one_row_shape():
             row["shape"],
             "the entry-point column names a module, or none",
         )
-    assert statuses == {input_shapes.STATUS_HELD, input_shapes.STATUS_PENDING}, statuses
-    assert not [row for row in rows if row["status"] == input_shapes.STATUS_PENDING and row["printed_line"]], (
-        "a pending row states no line"
-    )
+    assert statuses == {input_shapes.STATUS_HELD}, "no row is pending today, so the pins measure every row"
+    assert not [row for row in rows if row["status"] == input_shapes.STATUS_PENDING], "no row is pending today"
     held_lines = _rows(input_shapes.STATUS_HELD, states_line=True)
-    assert len(held_lines) == 12, "the pins measure every held row that states a line"
-    assert len(_refusal_rows()) == 11, "the pins measure every held refusal row through its owner"
+    assert len(held_lines) == 16, "the pins measure every held row that states a line"
+    assert len(_refusal_rows()) == 15, "the pins measure every held refusal row through its owner"
     assert len(_console_rows()) == 1, "the pins measure the held console line row through its owner"
-    assert len(_rows(input_shapes.STATUS_HELD, states_line=False)) == 8, "the pins measure every accepted row"
-    assert len(_rows(input_shapes.STATUS_PENDING)) == 1, "the pins read the pending rows as pending"
+    assert len(_rows(input_shapes.STATUS_HELD, states_line=False)) == 9, "the pins measure every accepted row"
 
 
 def test_the_pins_define_no_row_shape_and_no_row_of_their_own():
@@ -270,15 +258,17 @@ def test_the_shape_is_decided_from_the_bytes_and_not_from_a_file_name(tmp_path):
     nothing. The magic-bytes row is refused under a name that says XML, and the accepted XML row is accepted under a
     name that says archive, both read through the shared read rule (`tests/conftest.py::input_refusal`). The accepted
     archive rows answer the same way under the same three names, so the shape is read from the bytes and not from the
-    extension. The record row is one of them, because its content is a stream an entry point accepts."""
-    refused_row = _row("bytes the parser cannot read as one XML document, the magic bytes of a compressed member")
-    accepted_row = _row("XML bytes, no DTD, within the input limit")
+    extension. The record row is one of them, because its content is a stream an entry point accepts, and the row read
+    through a declared member is read with the declaration the row states, so the pins hold no member name of their
+    own."""
+    refused_row = shape_row("bytes the parser cannot read as one XML document, the magic bytes of a compressed member")
+    accepted_row = shape_row("XML bytes, no DTD, within the input limit")
     archive_rows = [
         row
         for row in _rows(input_shapes.STATUS_HELD, states_line=False)
         if row["content"][: len(xml_input.GZIP_MAGIC)] == xml_input.GZIP_MAGIC
     ]
-    assert len(archive_rows) == 3, (archive_rows, "every accepted archive row shows a compressed stream")
+    assert len(archive_rows) == 4, (archive_rows, "every accepted archive row shows a compressed stream")
     for name in ("shape.bin", "shape.xml", "shape.gz"):
         refused = tmp_path / name
         refused.write_bytes(refused_row["content"])
@@ -289,7 +279,11 @@ def test_the_shape_is_decided_from_the_bytes_and_not_from_a_file_name(tmp_path):
         for row in archive_rows:
             shape = tmp_path / (name + ".shape")
             shape.write_bytes(row["content"])
-            assert input_refusal(shape) is None, (name, row["shape"], "the read rule accepts this shape under any name")
+            assert input_refusal(shape, row["member"] or None) is None, (
+                name,
+                row["shape"],
+                "the read rule accepts this shape under any name",
+            )
 
 
 def test_the_decompression_row_is_measured_against_the_expansion_and_not_the_compressed_size(tmp_path):
@@ -298,7 +292,7 @@ def test_the_decompression_row_is_measured_against_the_expansion_and_not_the_com
     expands to. The pins read the row through the producer, the owner the row names, and hold that the answer is the
     line the door states for a size refusal, with the origin and the limit as the parts the pins measure. The row
     states no size number, because the pins cannot read an expansion as a content size."""
-    row = _row(
+    row = shape_row(
         "the bytes a compressed stream expands to, past the input limit, refused while the cap is applied during "
         "decompression"
     )
@@ -308,21 +302,21 @@ def test_the_decompression_row_is_measured_against_the_expansion_and_not_the_com
     assert error is not None, (row["shape"], "the producer refuses this shape before the parse")
     assert panorama_to_terraform.is_refusal(error), (row["shape"], "the refusal kind is the one the door states")
     assert "{size}" not in row["printed_line"], (row["shape"], "the pins state no size they cannot read from the row")
-    assert _printed(error) == _line(row, path), (row["shape"], "the printed line is the row's wording")
-    assert f"limit of {EXPANSION_LIMIT} bytes" in _printed(error), (row["shape"], "the line names the limit")
+    assert printed_refusal(error) == _line(row, path), (row["shape"], "the printed line is the row's wording")
+    assert f"limit of {EXPANSION_LIMIT} bytes" in printed_refusal(error), (row["shape"], "the line names the limit")
 
 
 def test_the_dtd_row_is_measured_by_the_parser_and_not_by_a_text_search(tmp_path):
     """Criterion 4: the UTF-16 row holds the same prolog as the accepted row, in an encoding no byte-level text
     search can read, and the parser still answers the row's line, so the row's answer is the parser's and not a text
     search's. The pins build the encoding from the accepted row's content, so they hold no content of their own."""
-    row = _row("a DTD in an encoding a text search cannot read, the UTF-16 shape")
+    row = shape_row("a DTD in an encoding a text search cannot read, the UTF-16 shape")
     # A text search reads bytes one for one, so these bytes hold no wording a text search can read.
     assert "<!DOCTYPE" not in row["content"].decode("latin-1"), "the bytes hold no wording a text search can read"
     path = tmp_path / "input"
     error = _answer(row, path)
     assert error is not None, "the door still refuses this shape"
-    assert _printed(error) == _line(row, path), (error, "the parser reads the prolog in any encoding")
+    assert printed_refusal(error) == _line(row, path), (error, "the parser reads the prolog in any encoding")
 
 
 @pytest.mark.parametrize("row", _refusal_rows())
@@ -334,19 +328,19 @@ def test_a_held_refusal_row_prints_the_line_its_owner_states(row, tmp_path):
     error = _answer(row, path)
     assert error is not None, (row["shape"], "a held refusal row is refused by its owner")
     assert panorama_to_terraform.is_refusal(error), (row["shape"], "the refusal kinds are the two the door states")
-    assert _printed(error) == _line(row, path), (row["shape"], "the printed line is the row's wording")
+    assert printed_refusal(error) == _line(row, path), (row["shape"], "the printed line is the row's wording")
     if row["measured_through"] in ("xml_input.check_bytes", "xml_input.read_input", "state_input.parse_state"):
         # The door's wording names the source, which the pins measure, so the source part is a placeholder.
         assert "{origin}" in row["printed_line"], (row["shape"], "the source part of a refusal is measured")
         if "{size}" in row["printed_line"]:
-            assert str(len(row["content"])) in _printed(error), (
+            assert str(len(row["content"])) in printed_refusal(error), (
                 row["shape"],
                 "the size the line prints is the content",
             )
     else:
         # The parse shape names no source: the answer part is what the parser answered for this content, so the row
         # states that answer as wording and holds no placeholder the pins would have to invent.
-        assert _printed(error).endswith(str(error)), (row["shape"], "the answer part is the parser's answer")
+        assert printed_refusal(error).endswith(str(error)), (row["shape"], "the answer part is the parser's answer")
 
 
 @pytest.mark.parametrize("row", _rows(input_shapes.STATUS_HELD, states_line=False))
@@ -361,7 +355,8 @@ def test_an_accepted_row_answers_no_refusal_through_the_shared_read_rule(row, tm
         # The shared rule reads corpus material as XML, so a JSON shape is read through the door that owns the kind.
         assert input_refusal(path) is not None, (row["shape"], "the shared rule reads no JSON shape as XML")
     else:
-        assert input_refusal(path) is None, (row["shape"], "the shared read rule accepts it")
+        # A row that states a declaration is read with the row's own declaration, so the pins hold no member name.
+        assert input_refusal(path, row["member"] or None) is None, (row["shape"], "the shared read rule accepts it")
 
 
 @pytest.mark.parametrize("row", _console_rows())
@@ -395,47 +390,115 @@ def test_a_held_console_row_prints_the_fact_through_the_block_its_owner_states(r
     ], (parts, "the line names the three parts the shape holds")
 
 
-@pytest.mark.parametrize("row", _rows(input_shapes.STATUS_PENDING))
-def test_a_pending_row_states_no_line_and_names_the_piece_that_will_state_its_line(row, tmp_path):
-    """The pending half of the status rule (`docs/INPUT_SHAPES.md` §3 rule 3), measured: a pending row states no
-    line, names the piece that will state its line, names no entry point and no owner, so the pins can read nothing
-    from it. Today its bytes are answered only by a held row that shows the same bytes, which is what the pins
-    measure."""
-    assert row["printed_line"] == "", (row["shape"], "no line exists for a pending row yet")
-    assert row["pending_on"], (row["shape"], "a pending row names the piece that will state its line")
-    assert row["pending_on"].startswith("Piece "), (
-        row["shape"],
-        "a pending row names a piece, because both §2 decisions are taken",
-    )
-    assert row["entry_point"] == "none", (row["shape"], "no entry point reads a pending shape today")
-    assert row["measured_through"] == "", (
-        row["shape"],
-        "the pending rule has no owner, so no pin can hold this row as measured",
-    )
-    same_bytes = [row2 for row2 in _rows(input_shapes.STATUS_HELD) if row2["content"] == row["content"]]
-    assert same_bytes, (row["shape"], "the same bytes are answered today by a held row")
-    for held in same_bytes:
-        error = _answer(held, tmp_path / "input")
-        if error is None:
-            assert held["printed_line"] == "", (row["shape"], "the held row accepts the same bytes")
-        else:
-            assert _printed(error) == _line(held, tmp_path / "input"), (
-                row["shape"],
-                "today's answer is the line the held row states",
-            )
-
-
-def test_the_pending_rows_name_pieces_and_no_taken_decision():
-    """The status rule read as a set (`docs/INPUT_SHAPES.md` §3 rule 3): the pending rows name the pieces that will
-    state their lines, so a row that names a §2 decision would name a decision this piece took. Both §2 decisions are
-    taken, so the pending set is the one piece that still needs an owner. The splitter row is held, because the run
-    prints the line Piece 13A.2 wrote for it, and no pending row holds a line. The archive rows are held, because the
-    producer Piece 13B.2 wrote measures them, and the record row is held, because the record build rule Piece 13B.3
-    landed measures it."""
-    pending = {row["pending_on"] for row in input_shapes.SHAPE_TABLE if row["status"] == input_shapes.STATUS_PENDING}
-    assert pending == {"Piece 13B.4"}, pending
+def test_no_row_is_pending_so_the_pins_measure_every_row_through_an_owner_they_call():
+    """The pending half of the status rule (`docs/INPUT_SHAPES.md` §3 rule 3), read as an absence: no row is pending
+    today, because Piece 13B.4 landed the owner its rule states, so every row names a function the pins can call and
+    states a line the pins can measure. A pending row states no line, names no entry point as accepting its shape and
+    names no owner, so a rule that has no owner cannot hold a row, and no row names a §2 decision a pin cannot
+    measure. The row the piece moved is read through the producer the table names, so the pins read the member rule's
+    answer through the owner that states it and hold no line of their own."""
+    pending = [row for row in input_shapes.SHAPE_TABLE if row["status"] == input_shapes.STATUS_PENDING]
+    assert pending == [], "no row is pending today"
     for row in input_shapes.SHAPE_TABLE:
-        assert not (row["status"] == input_shapes.STATUS_PENDING and row["printed_line"]), (row["shape"], "both")
+        assert row["pending_on"] == "", (row["shape"], "a held row names no decision or piece it waits for")
+        module, _, name = row["measured_through"].partition(".")
+        assert hasattr(OWNERS[module], name), (row["shape"], "every row names a function its owner defines")
+    moved = shape_row("a bundle that holds more than one XML member, refused when the operator names no member")
+    assert moved["measured_through"] == "xml_input.parse_archive", (
+        moved["shape"],
+        "the pins read the member rule's answer through the producer",
+    )
+
+
+def test_the_member_rule_line_holds_only_the_origin_as_a_measured_part(tmp_path):
+    """Criterion 2, the member half (`docs/INPUT_SHAPES.md` §3 rule 2): the member rule's line names the source as
+    the part the pins measure and states no member count, because a count is a fact the pins read from the row's own
+    content and a line that named one would state a number the pins cannot read from the row. The pins read the row
+    through the producer, print the answer through the entry point's own print site, and hold that the line is the
+    row's wording with only the origin filled in."""
+    row = shape_row("a bundle that holds more than one XML member, refused when the operator names no member")
+    assert _placeholders(row) == {"origin"}, (row["shape"], "the pins measure no part of their own")
+    assert not any(character.isdigit() for character in row["printed_line"]), (
+        row["shape"],
+        "the line names no count the pins cannot read from the row",
+    )
+    path = tmp_path / "input"
+    error = _answer(row, path)
+    assert error is not None, (row["shape"], "the member rule refuses this shape")
+    assert panorama_to_terraform.is_refusal(error), (row["shape"], "the refusal kind is the one the door states")
+    assert printed_refusal(error) == _line(row, path), (row["shape"], "the printed line is the row's wording")
+
+
+def test_the_table_mirrors_the_member_rule_and_holds_no_wording_of_its_own():
+    """Criterion 2, as a scan of the table module and of the owner: the member rule's refusal is stated inside the
+    rule function the owner defines, the table mirrors it as data and builds no wording of its own, and the producer
+    reads the shape through the rule and states no refusal, so the table cannot mirror a wording a producer holds."""
+    tree = ast.parse((SRC_DIR / "xml_input.py").read_text(encoding="utf-8"))
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+    rule = functions["read_member"]
+    assert [node for node in ast.walk(rule) if isinstance(node, ast.Raise)], (
+        "the member rule states its own refusal, which is the wording the row mirrors",
+    )
+    producer = functions["parse_archive"]
+    assert "read_member" in [
+        getattr(node.func, "id", "") for node in ast.walk(producer) if isinstance(node, ast.Call)
+    ], (producer, "the producer reads the shape through the rule the owner states")
+    assert not [node for node in ast.walk(producer) if isinstance(node, ast.Raise)], (
+        "the producer states no refusal of its own",
+    )
+    table_tree = ast.parse((SRC_DIR / "input_shapes.py").read_text(encoding="utf-8"))
+    assert not [node for node in ast.walk(table_tree) if isinstance(node, ast.JoinedStr)], (
+        "the table mirrors the wording as data and builds none",
+    )
+
+
+def test_the_declaration_is_row_data_and_no_pin_holds_a_member_of_its_own():
+    """Criterion 1, the declaration half: a row that states no declaration states the empty string, so the pins read
+    the declaration as row data, and only a row read through the archive producer states one, because the declaration
+    is the operator's argument and the pins read it through the row. The pins hold no declaration of their own."""
+    for row in input_shapes.SHAPE_TABLE:
+        assert row["member"] == "" or row["measured_through"] == "xml_input.parse_archive", (
+            row["shape"],
+            "only a row read through the archive producer states a declaration",
+        )
+    declared = {row["member"] for row in input_shapes.SHAPE_TABLE if row["member"]}
+    assert declared, "the pins read at least one row through a declared member"
+    for module in sorted(TESTS_DIR.glob("*.py")):
+        text = module.read_text(encoding="utf-8")
+        if "shape_row" not in text:
+            continue
+        tree = ast.parse(text)
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
+                assert node.value.value not in declared, (module.name, node.value.value, "a pin holds no member name")
+
+
+def test_no_test_module_holds_a_row_line_or_a_print_shape_of_its_own():
+    """Criterion 1, read across the test set: the rows are read through `tests/conftest.py::shape_row` and the line
+    is captured through `tests/conftest.py::printed_refusal`, so a test module that reads a row defines no row reader
+    of its own, no print shape of its own, and holds no line of a row as a string of its own, because the table is the
+    one definition of the wording and the pins compare against it. The pins fill the parts they measure through the
+    owners, so a pin that held a line would be a second definition."""
+    for module in sorted(TESTS_DIR.glob("*.py")):
+        text = module.read_text(encoding="utf-8")
+        if "shape_row" not in text:
+            continue
+        tree = ast.parse(text)
+        if module.name != "conftest.py":
+            names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
+            for shared in ("shape_row", "printed_refusal", "shape_line"):
+                assert shared not in names, (module.name, shared, "the shared fact lives in `tests/conftest.py`")
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+                continue
+            for row in input_shapes.SHAPE_TABLE:
+                if not row["printed_line"]:
+                    continue
+                assert row["printed_line"] not in node.value, (
+                    module.name,
+                    node.value,
+                    "a test module holds a row line of its own",
+                )
 
 
 def test_the_record_row_is_measured_through_the_record_build_rule(tmp_path):
@@ -447,7 +510,7 @@ def test_the_record_row_is_measured_through_the_record_build_rule(tmp_path):
     reads, and the record reads back as itself through `parse_record`, so the row's owner is a build rule the pins
     call, not a wording the table states.
     """
-    row = _row("the decompressed bytes an archive read names in the provenance record")
+    row = shape_row("the decompressed bytes an archive read names in the provenance record")
     path = tmp_path / "input"
     origin = _origin(path)
     source = xml_input.parse_archive(row["content"], origin)
@@ -457,7 +520,7 @@ def test_the_record_row_is_measured_through_the_record_build_rule(tmp_path):
     assert record.member == source.origin.member, "the record names the member through the origin"
     assert record.member != provenance.ABSENT, "the stream states a member name"
     assert record.name == origin.name and record.path == str(origin.path), "the producer changed no name rule"
-    assert record.size == len(_row("XML bytes, no DTD, within the input limit")["content"]), (
+    assert record.size == len(shape_row("XML bytes, no DTD, within the input limit")["content"]), (
         "the size names the bytes the door checked, not the compressed stream"
     )
     assert record.sha256 == source.sha256, "the hash names the same bytes the door checked"
@@ -466,25 +529,30 @@ def test_the_record_row_is_measured_through_the_record_build_rule(tmp_path):
     # The member is the name each stream states, read by the producer, so the record module states no value for it:
     # the two accepted archive rows answer with two different names, and a stream that states no name answers the `-`
     # the record module states for a field that does not apply.
-    gzip_row = _row("a gzip stream that holds exactly one member, read through the archive producer")
-    tar_row = _row("a gzip stream that holds a tar archive with exactly one member, read through the archive producer")
+    gzip_row = shape_row("a gzip stream that holds exactly one member, read through the archive producer")
+    tar_row = shape_row(
+        "a gzip stream that holds a tar archive with exactly one member, read through the archive producer"
+    )
     names = {}
-    for shape_row in (gzip_row, tar_row):
-        shape_source = _owner(shape_row)(shape_row["content"], _origin(tmp_path / "shape"))
-        names[shape_row["shape"]] = provenance.record_for(shape_source, None).member
+    for record_shape in (gzip_row, tar_row):
+        shape_source = _owner(record_shape)(record_shape["content"], _origin(tmp_path / "shape"))
+        names[record_shape["shape"]] = provenance.record_for(shape_source, None).member
     assert names[gzip_row["shape"]] != names[tar_row["shape"]], (names, "the name comes from each stream")
 
 
 @pytest.mark.parametrize("shape", ENTRY_POINT_ROWS)
 def test_both_entry_points_print_the_same_line_for_the_same_bytes(shape, tmp_path):
     """Criterion 3, at the entry points: the converter and the splitter read the same bytes and print the same line,
-    so the row's line is the shape both entry points print for it. Both exit 1 and neither writes a file."""
-    row = _row(shape)
+    so the row's line is the shape both entry points print for it. Both exit 1 and neither writes a file. A row that
+    states a declaration is read with the declaration the row states, so the pins pass no member name of their own.
+    """
+    row = shape_row(shape)
     path = tmp_path / "input"
     path.write_bytes(row["content"])
     expected = _line(row, path)
-    converter = run_script("panorama_to_terraform.py", str(path), "--output-dir", str(tmp_path / "out"))
-    splitter = run_script("split_device_groups.py", str(path), "--output-dir", str(tmp_path / "split"))
+    declared = ["--member", row["member"]] if row["member"] else []
+    converter = run_script("panorama_to_terraform.py", str(path), "--output-dir", str(tmp_path / "out"), *declared)
+    splitter = run_script("split_device_groups.py", str(path), "--output-dir", str(tmp_path / "split"), *declared)
     assert converter.returncode == 1 and splitter.returncode == 1, (converter.stdout, splitter.stdout)
     assert [line for line in converter.stdout.splitlines() if line.startswith("Error:")] == [expected], converter.stdout
     assert [line for line in splitter.stdout.splitlines() if line.startswith("Error:")] == [expected], splitter.stdout

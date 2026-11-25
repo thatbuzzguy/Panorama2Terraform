@@ -7,8 +7,8 @@ paths a test reads the layout through, states no second path rule, and holds the
 test module reads: the terraform binary, the two resource-line patterns, the rule-block parser, the record
 read-back the Epic 11 pins read (the join key per record, and the four records read back through each module's
 `parse_rows`), and the two runs the partial-run pins read (one run writes a codebase, a second run writes into a
-copy of its output). A test module does not define its own copy of any of them, and no test module imports another
-test module.
+copy of its output), and the shape-table row the pins read as data. A test module does not define its own copy of
+any of them, and no test module imports another test module.
 """
 
 import contextlib
@@ -28,6 +28,7 @@ import codebase_state
 import commit_actions
 import entry_coverage
 import import_blocks
+import input_shapes
 import panorama_to_terraform
 import rule_data
 import sanity_checks
@@ -258,7 +259,7 @@ UNREAD_NUMBER_FACT = f"{NUMBER_FIELD} {UNREAD_NUMBER_TEXT!r} is not a signed int
 # --- The corpus read rule the corpus pins read (F3.8, F3.9) ---------------------
 
 
-def input_refusal(path) -> str | None:
+def input_refusal(path, member: str | None = None) -> str | None:
     """What the tool's input rule answers for one committed fixture: the refusal reason, or None when it accepts.
 
     The rule is `xml_input.check_bytes`, then the parse, read on the committed bytes. This is the one place the
@@ -266,14 +267,52 @@ def input_refusal(path) -> str | None:
     name. `tools/build_kitchen_sink.py` states the same rule for the same reason, and
     `tests/test_build_kitchen_sink.py` pins that the two agree on the committed corpus. A fixture this answers
     None for cannot fail the parse, so a pin that reads it needs no guard.
+
+    `member` is the declaration a run passes to the file producer, so a pin that reads a shape-table row reads the
+    row's own declaration here and states no member name of its own.
     """
     try:
-        xml_input.parse_xml(path)
+        xml_input.parse_xml(path, xml_input.DEFAULT_MAX_INPUT_BYTES, member)
     except xml_input.UnsafeInputError as exc:
         return str(exc)
     except ET.ParseError as exc:
         return f"the parse cannot read it: {exc}"
     return None
+
+
+def shape_row(name: str) -> dict:
+    """One row of the input shape table, read as data through the module that owns the table.
+
+    The test modules that read a row read it from here, so no test module holds a row, its content, its printed
+    line, or its declaration of its own, and the pins read the shape from the table's bytes (`docs/INPUT_SHAPES.md`
+    §3 rule 4). The table is data, so this defines no row shape.
+    """
+    rows = [row for row in input_shapes.SHAPE_TABLE if row["shape"] == name]
+    assert len(rows) == 1, (name, "the table states each shape once")
+    return rows[0]
+
+
+def printed_refusal(error: Exception) -> str:
+    """The line the run prints for one refusal, captured from the entry point's own print site.
+
+    Two test modules read this, so the print shape is stated once here and no test module holds the prefix or a line
+    of its own (`docs/INPUT_SHAPES.md` §3 rule 5).
+    """
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        assert panorama_to_terraform.refused(error) == 1, "a refusal exits 1"
+    return buffer.getvalue().strip()
+
+
+def shape_line(row: dict, origin, size: int, limit: int) -> str:
+    """A row's own wording with the parts the pins measure filled in, through the owner that states the origin phrase.
+
+    The pins measure the origin and the byte counts and read every other part of the line as the row's wording, so a
+    test module holds no line of its own (`docs/INPUT_SHAPES.md` §3 rule 2). This is the one place the test set fills
+    the placeholders, so the pins that read a row through an owner and the pins that read it at a run compare the same
+    wording.
+    """
+    return row["printed_line"].format(origin=xml_input.origin_phrase(origin), size=size, limit=limit)
 
 
 def corpus_fixtures() -> list[str]:
