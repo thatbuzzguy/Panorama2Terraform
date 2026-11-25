@@ -131,9 +131,11 @@ Processing device group: DG-Guest
 The names the run prints for a group are the source names, because the run prints what the
 row holds; the file name is the §5 shape of that name.
 
-A firewall export holds no device-group row, so the run prints the fact it read — the row count, the shape the tree
-holds instead, and the source line — through the console-line owner, and exits non-zero. Convert such an export
-directly.
+For a firewall export the splitter's own table reads nothing, so `split_device_groups.console_lines` prints the fact
+through the console-line owner and the run exits non-zero. Convert such an export directly. Which export a run
+needs, and how to get one, is stated once in [USAGE_GUIDE.md](USAGE_GUIDE.md) §Which export a run needs, so this
+document keeps the join rule and the split file's content, links to that section for the export, and states no shape
+of its own.
 
 ## Batch conversion
 
@@ -150,7 +152,7 @@ done
 
 | Symptom | Cause and action |
 |---|---|
-| The run states zero `device-group/entry` rows | The export came from a firewall, not Panorama, which is the firewall export row of [`../src/input_shapes.py`](../src/input_shapes.py). Run the converter on it directly. |
+| The run states zero `device-group/entry` rows | The export came from a firewall, not Panorama, which is the firewall export row of [`../src/input_shapes.py`](../src/input_shapes.py), and [USAGE_GUIDE.md](USAGE_GUIDE.md) §Which export a run needs states which export each script reads. Run the converter on it directly. |
 | "two device group names read one file name" | Two source names read the same §5 shape, so they name one file. Rename one of them in the export. The run writes nothing, because the number it would have to pick depends on the entry order. |
 | No template copied | No device appears in both the device group and the template. Check both device lists. If Panorama really does not link them, add the device to the template, or copy the template section by hand. |
 | Shared objects missing from a split file | The source had no `shared` section. A split file copies the shared section only when the export has one. |
@@ -158,4 +160,5 @@ done
 The shape the splitter read is a row of [`../src/input_shapes.py`](../src/input_shapes.py), and that row now states
 the line the run prints for it: the row count, the shape the tree holds instead, and the source line, printed through
 `container_coverage.console_line` ([INPUT_SHAPES.md](INPUT_SHAPES.md) §3 and §4). The troubleshooting rows name the
-shape and hold no row wording, so the table stays one definition.
+shape and hold no row wording, so the table stays one definition. The rule about which export a run needs has one
+owner, [USAGE_GUIDE.md](USAGE_GUIDE.md) §Which export a run needs, and this document links to it.

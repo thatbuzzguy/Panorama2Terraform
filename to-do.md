@@ -2,22 +2,9 @@
 
 The tracking markdown for the completed pieces is removed here; the git history and the owner
 documents hold it. The items that need a fact a live target states are in `backlog.md`. Epic 11 is complete as of
-2026-11-23, so its piece list and its open facts are in `backlog.md`, and the acceptance criteria for the current
-piece are in `acceptance.md`, with pointers to the Epic 13 and Epic 14 records.
-
-## Epic 13 — the shapes an input can be (design record `docs/INPUT_SHAPES.md`)
-
-Planned in the `input-shapes` worktree, 2026-11-23. The decisions are in `PLAN.md`, the criteria
-are in `acceptance.md`, and the live facts are in `backlog.md`. Phase 13A is complete as of 2026-11-24 and Phase 13B
-as of 2026-11-25, so their pieces are in the git history. Every shape row names an owner the pins call, so no row is
-pending, and Phase 13C needs no decision.
-
-### Phase 13C, the documents
-
-- **13C.1** — how to get the correct export: the Panorama-level export holds the device-group
-  rows, a per-device export holds the device's own config with none. Stated in `docs/USAGE_GUIDE.md`
-  and `docs/DEVICE_GROUP_SPLITTING.md`; the troubleshooting rows hold no row wording, because they
-  name the shape and link to the table, which `tools/check_documents.py` reads.
+2026-11-23 and Epic 13 as of 2026-11-25, so their piece lists are in the git history and their open facts are in
+`backlog.md`. The acceptance criteria for the current piece are in `acceptance.md`, with pointers to the Epic 13
+design record and the Epic 14 record.
 
 ## Epic 14 — the blocks a run binds to the live config (design record `docs/IMPORT_BINDING.md`)
 

@@ -336,20 +336,11 @@ per-unit file names its unit only by its directory, so a gate finding names the 
 
 ## Exporting from Panorama
 
-Check which export you got before running either script, because the two export shapes answer
-different questions.
-
-- **CLI, on Panorama:** `export config from panorama`. The file is the Panorama shape: the
-  `config` root holds `device_group`, `shared`, `templates`, and `template_stacks`. This is the
-  file the splitter reads.
-- **CLI, for one managed device:** `export config from device <serial>`, or `show config running`
-  after `set cli config-output-format xml`. The file is that device's own config: entries under
-  `devices/entry/<serial>`, no `device-group` row. The converter reads this shape directly;
-  only the splitter refuses it, and the splitter reports that it read no `device-group` row
-  ([docs/DEVICE_GROUP_SPLITTING.md](docs/DEVICE_GROUP_SPLITTING.md)).
-- **Web UI:** Device -> Setup -> Operations -> save a configuration snapshot on Panorama itself
-  and extract the XML. A snapshot saved on a managed device gives the device shape above.
-- **API:** `curl -k -X GET 'https://panorama/api/?type=export&category=configuration&key=KEY' -o config.xml`
+Check which export you got before running either script, because the two exports are two shapes. Which export a run
+needs, and how to get one, is stated once in [docs/USAGE_GUIDE.md](docs/USAGE_GUIDE.md) §Which export a run needs,
+and the shapes are rows of the input shape table ([`src/input_shapes.py`](src/input_shapes.py)), so this index links
+to both and states no shape wording of its own. The splitter's answer for the device export is in
+[docs/DEVICE_GROUP_SPLITTING.md](docs/DEVICE_GROUP_SPLITTING.md).
 
 `src/xml_input.py` is the only input read, and its archive producer expands one accepted member: a
 single-member gzip, and a gzip stream that holds a tar archive with exactly one member. The two checks

@@ -1,79 +1,43 @@
 # Agent Status
 
-## Current position (main, Piece 13B.4, 2026-11-25)
+## Current position (main, Piece 13C.1, 2026-11-25)
 
-Piece 13B.4 is complete on main, 2026-11-25, and is not pushed. It lands decision 4 of `docs/INPUT_SHAPES.md` §2, so
-Phase 13B is complete: `xml_input.read_member` is the owner that decides which member a run reads,
-`xml_input.add_member_argument` is the CLI argument that holds the operator's declaration, and the row that named this
-piece moved from `pending` to `held` in the same commit. No row is pending, so every row names a function its owner
-defines and the pins read the pending set as an absence.
+Piece 13C.1 is complete on main, 2026-11-25, and is not pushed. It is a documents-only piece and the last piece of
+Epic 13, so the epic is complete and its pieces are in the git history; the facts only a live target states stay in
+`backlog.md`. The rules this piece wrote are the operator rule for which export a run needs, and the ownership of it:
 
-The rule states its refusal as a literal inside the rule function, and the table mirrors that wording as data:
-`src/input_shapes.py` still states no rule as a function and builds no wording, so a mirror cannot drift from the
-module that states the rule. The line holds only `{origin}` as a measured part, because the number of members a bundle
-holds is a fact a pin reads from the row's own content, so the line names no count. The argument states no path rule
-and no naming rule of its own, following the shape of `--max-input-bytes`, and it decides nothing an owner decides: a
-run that declares nothing reads the one member a bundle holds and is refused nothing by the argument.
+- `docs/USAGE_GUIDE.md` §Which export a run needs is the owner, because it is the document that tells the operator
+  how to run each script. It states that the Panorama-level export is the one a run needs for device groups and that
+  a per-device export is the one a run needs for that device's own config, names the fact that tells them apart, and
+  keeps the pins that read the two shapes as named tests. The shapes are rows, so the section names them, holds no row
+  wording, and links to the table and to `docs/INPUT_SHAPES.md` §1 fact 3.
+- `README.md` §Exporting from Panorama, `docs/DEVICE_GROUP_SPLITTING.md`, `docs/INPUT_SHAPES.md` §1 fact 3 and the two
+  troubleshooting rows link to that section and state no shape wording. `docs/DEVICE_GROUP_SPLITTING.md` keeps only
+  what it owns: the join between a device group and a template, what a split file holds, and the splitter's answer for
+  a device export. `docs/README.md` gained the owner row for the rule.
+- The two facts that only a live target states — which file form the UI download writes, and which member a bundle
+  holds — are named as live facts and not stated as facts.
 
-Refusal order, as the pins read it: for a bundle that holds more than one member with no declaration the member rule
-answers before the door is handed any bytes, so `check_bytes` runs nothing for it and the origin keeps the kind its
-producer states. For a declared member the two checks answer on the bytes that member expands to, and the cap is
-applied during the expansion, so the refusal for an over-limit member comes from the expansion and not from the
-compressed size. A declared member the bundle does not hold answers None, so those bytes reach the door unchanged and
-the parse answers the line the table already holds for them. `parse_archive` runs no check and states no refusal, so
-`check_bytes` stays the one definition of the two checks, and selection by member order stays refused by the
-determinism rule (`docs/ARCHITECTURE.md` §6).
+The guard finding this piece measured is in `backlog.md`: check 7 reads only a row's `printed_line`, and the two
+config shape rows state none, so a document that copies a shape name or its description is not a finding for the
+check. The rule that a document names the shape and holds no row wording is read by hand.
 
-`SHAPE_ROW_FIELDS` gained the `member` field, so the declaration is row data and a row that states none states the
-empty string. The pins read every row through `tests/conftest.py::shape_row`, fill a line through
-`tests/conftest.py::shape_line` with only the parts they measure, and capture the print shape through
-`tests/conftest.py::printed_refusal`, so no test module holds a row, a row line, a declaration, or a print shape of
-its own. `tests/test_provenance.py` now reads the rows through the shared reader, so the row reader is defined once.
-
-What moved:
-
-- The shape-table counts, read as data: 21 → 25 rows, held rows that state a line 12 → 16, held refusal rows
-  11 → 15, held accepted rows 8 → 9, the console line row stays 1, pending rows 1 → 0, and the rows read through a
-  declaration 0 → 4. `test_the_table_is_data_with_one_row_shape` states the accepted and pending counts, and the
-  pending pins `::test_the_pending_rows_name_pieces_and_no_taken_decision` and
-  `::test_a_pending_row_states_no_line_and_names_the_piece_that_will_state_its_line` are replaced by
-  `::test_no_row_is_pending_so_the_pins_measure_every_row_through_an_owner_they_call`.
-- Eight pins are added: five in `tests/test_input_shapes.py`
-  (`::test_the_member_rule_line_holds_only_the_origin_as_a_measured_part`,
-  `::test_the_table_mirrors_the_member_rule_and_holds_no_wording_of_its_own`,
-  `::test_the_declaration_is_row_data_and_no_pin_holds_a_member_of_its_own`,
-  `::test_no_test_module_holds_a_row_line_or_a_print_shape_of_its_own`, and the pending-absence pin above) and three
-  in `tests/test_safe_input.py` (`::test_the_checks_answer_on_the_bytes_a_declared_member_expands`,
-  `::test_the_member_rule_states_no_check_and_no_size_rule_of_its_own`,
-  `::test_the_member_argument_states_no_rule_an_owner_states`). Two pins were removed, so the pins move 1,848 → 1,861
-  in the same 55 test modules; the 7 extra instances are the parametrized pins reading the 5 new rows, 4 refusal,
-  1 accepted, and 2 entry-point rows.
-- `tests/test_safe_input.py::test_file_producer_runs_the_checks_through_the_boundary` moves with the producer: the
-  two-member bundle is now refused by the member rule before the door is handed bytes, so the recorded calls are the
-  empty set and the printed line is the row's wording read through `shape_row`. The same pin group holds that the
-  entry points pass `args.member` and state no member rule.
-- `tests/test_api_path.py` gains no pin: the entry-argument pin names `member` in the shared set, and the module-owns
-  pin names `add_member_argument` in `source_fetch.py`'s list, because both entry points read the argument through
-  that module. No `src/` module and no test module is added, and no fixture is added, so the index pin, the fixture
-  set and the `docs/LICENSING.md` counts did not move.
-
-Gate, measured 2026-11-25 single-threaded on the tree that holds this work: `ruff check .` clean at `py310` with the
-120-character line length, `ruff format --check .` clean on the 112 files it reads, `python3 tools/check_documents.py`
-reports no finding, and `python3 -m pytest` in one process, with no parallel plugin, exits 0 with 1,857 passed and the
-same 4 `tflint` skips, so 1,861 pins in 55 test modules, in 305.64 s. The 4 skips are the `tflint` pins in
-`tests/test_sanity_gate.py`; `terraform` (1.16.2 on this machine) is present, so the provider-schema pins ran. The run
-times on this machine move between runs, as the Piece 13B.3 record says, so the single figure here is one measurement
-and not a range.
+Nothing in `src/` or in `tests/` changed, so no pin, no fixture, no golden, no index name and no `docs/LICENSING.md`
+count moved. Gate, measured 2026-11-25 single-threaded on the tree that holds this work: `ruff check .` clean at
+`py310` with the 120-character line length, `ruff format --check .` clean on the 112 files it reads,
+`python3 tools/check_documents.py` reports no finding in 12.28 s, and `python3 -m pytest` in one process, with no
+parallel plugin, exits 0 with 1,857 passed and the same 4 `tflint` skips, so 1,861 pins in 55 test modules, in
+470.76 s. The fast path before the full run answered 43 passed in 1.02 s for `tests/test_layout.py` and
+`tests/test_input_shapes.py`. Run times on this machine move between runs, so each figure here is one measurement.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §1, §3.1 and §3.3, `src/input_shapes.py`,
-`src/xml_input.py`, `src/source_fetch.py`, `src/panorama_to_terraform.py`, `src/split_device_groups.py`,
-`tests/conftest.py`, `tests/test_input_shapes.py`, `tests/test_provenance.py`, `tests/test_safe_input.py`,
-`tests/test_api_path.py`, `tests/test_write_path.py`, `tools/check_documents.py`, `pyproject.toml`.
+`commit.md`, `README.md`, `docs/README.md`, `docs/INPUT_SHAPES.md` §1 and §3, `docs/USAGE_GUIDE.md`,
+`docs/DEVICE_GROUP_SPLITTING.md`, `tools/check_documents.py` check 7, `src/input_shapes.py`,
+`src/split_device_groups.py`, `tests/test_input_shapes.py`, `tests/test_layout.py`,
+`tests/test_build_kitchen_sink.py`, `tests/test_split_device_groups.py`, `pyproject.toml`.
 
-The next piece is Piece 13C.1, the documents on how to get the correct export. Phase 13B is complete, so its pieces
-are in the git history. Epic 14's pieces are unaffected by the member rule, because no api pin reads a compressed
-response today.
+The next piece is Piece 14A.1, the two mode values and the level the mode sits at, which needs `docs/IMPORT_BINDING.md`
+§2 decision 1. Epic 13 has no piece left; its open facts are in `backlog.md`.
 
 ## Rules to keep when writing documents
 

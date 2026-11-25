@@ -769,6 +769,15 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
      from it, so this stays as an answer shape rather than a row.
   Owner: `docs/INPUT_SHAPES.md` §2 rule 4, `docs/ARCHITECTURE.md` §1.
 
+- **Finding, measured 2026-11-25 on Piece 13C.1: the guard that reads a document for shape wording cannot read the
+  two config shapes.** `docs/USAGE_GUIDE.md` §Which export a run needs is the owner of which export a run needs, and
+  `README.md`, `docs/DEVICE_GROUP_SPLITTING.md`, `docs/INPUT_SHAPES.md` §1 fact 3, `docs/README.md` and the two
+  troubleshooting rows link to it. Check 7 reads only a row's `printed_line`, and the two config shape rows state
+  none, so a document that copies a shape's name or its description is not a finding for that check: only the wording
+  a row prints for a refusal is read. The rule that a document names the shape and holds no row wording is read by
+  hand, so the agreement this piece measured is a document review and no pin can hold it. Owners:
+  `docs/USAGE_GUIDE.md` §Which export a run needs, `tools/check_documents.py` check 7.
+
 - Finding, measured 2026-11-24 on the gate for Piece 13B.3: one full run answered 1,557 passed, 4 skipped and 287
   errors, and the same tree answered 1,844 passed and 4 skipped on the run after it. The 287 are the pins that read
   the provider schema through `tests/conftest.py::provider_schemas`, which is one session fixture and asserts on a

@@ -57,6 +57,11 @@ namespace, `tests/` is flat with `tests/conftest.py` as the one shared helper fi
 under it, and a directory with no index of its own is named by the root index. `AGENTS.md` names the tracking
 markdown set.
 
+What bytes an input can be is recorded in `docs/INPUT_SHAPES.md`: the shape table is code in `src/input_shapes.py`,
+so a document that names a shape links to it, and the rule about which export a run needs has one owner,
+`docs/USAGE_GUIDE.md` §Which export a run needs, which the root index, `docs/DEVICE_GROUP_SPLITTING.md` and the
+troubleshooting rows link to.
+
 ## Goals
 
 | Goal | Description | Definition of Done |
@@ -77,47 +82,6 @@ front is whether documented response shapes can stand as committed response fixt
 the Epic 8 §4 facts, with the value half still gated on a live target. The recommended shape is a
 documentation-derived response builder under `tools/`, read through the injected-producer seam, so Goal 1
 and the standard-library rule are unchanged. Promoted to an epic on decision.
-
-## Open epic — Epic 13, the shapes an input can be (feature id `F13.x`)
-
-The design record is `docs/INPUT_SHAPES.md`. The pieces are in `to-do.md`, the criteria are in
-`acceptance.md`, and the facts that need a live target are in `backlog.md`. The epic extends
-Goal 5: an archive is a declared source, so it gains a producer behind the F5.1 door and no new
-check, and the provenance record names the source and the member it read.
-
-Three decisions, taken 2026-11-23:
-
-1. **Gzip and tar.gz are read through a producer behind the door, not through a new check.**
-   `check_bytes` stays the one definition of the two checks, and the door runs them on the
-   decompressed bytes.
-2. **The size cap applies during decompression, not after.** Without this the size check answers
-   for the compressed file only, and a bundle that expands past the cap reaches the parse.
-3. **The splitter prints the fact it reads** — the row count, the shape the tree holds, the
-   source line — instead of the current guess, through the console-line owner or the report. The
-   exit code does not change.
-
-Two more decisions, taken 2026-11-24, are in the design record §2:
-
-4. **The member rule.** One member is accepted: a single-member gzip, and a tar.gz that holds exactly one XML
-   member. A bundle with more than one XML member is read only when the operator declares which member to read, as
-   an argument held by the CLI; with no declaration the run refuses. A selection that reads member order stays
-   refused by the determinism rule (§6).
-5. **The provenance bytes.** For an archive read the record names the decompressed bytes, because the record names
-   the bytes the door checked and the door checks the decompressed bytes. `SourceOrigin.kind` names the archive, and
-   the member name enters the record as a field the file case does not have. The cache rule reads through the owner
-   that already states it, `source_fetch.py` (`docs/ARCHITECTURE.md` §3.3), so no rule is stated twice, and the
-   condition that differs is the measurement in the design record §1 fact 6.
-
-The three rules the decisions name have owners. `xml_input.parse_archive` is the producer behind the
-door, so the cap is applied while the bytes expand; `provenance.record_for` builds the record for the bytes the door
-checked, through the origin the producer states; and `xml_input.read_member` decides which member a run reads, with
-the declaration held by the CLI argument `xml_input.add_member_argument`. The shape table has its owner module,
-`src/input_shapes.py`, so a decision that is taken moves its row in the same commit, and no row is pending today:
-every row names a function its owner defines.
-Measured on three legs of the "XML and XPath" page — the 9.1 (EoL) leg and the 11.1 & Later leg on 2026-11-23,
-and the 10.2 leg on 2026-11-24 — the node model and the entry shape are the same on each, so the read layer agrees
-with the documented shape on all three. The 10.2 leg was read through a stored capture, because its live address
-answers a redirect; the redirect finding and the address that answered are in `backlog.md`.
 
 ## Planning — Epic 14, the blocks a run binds to the live config (feature id `F14.x`)
 

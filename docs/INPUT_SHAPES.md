@@ -1,6 +1,6 @@
 # Input Shapes
 
-Design record for Epic 13, open. This document is the owner of the rules about what bytes an
+Design record for Epic 13, landed. This document is the owner of the rules about what bytes an
 input can be, which entry point accepts each shape, and what the run states when a shape is
 refused or read. The document index is in [README.md](README.md). The read rule it extends is
 [ARCHITECTURE.md](ARCHITECTURE.md) §3.1, and the console-line shape a new finding must fit is
@@ -33,7 +33,9 @@ refused or read. The document index is in [README.md](README.md). The read rule 
    `device-group` entries plus `templates` and `template_stacks`, and a firewall's own export
    holds `devices/entry/<serial>` — or `localhost.localdomain` — with no device-group row. Both
    are converter inputs; only the splitter refuses the second
-   (`docs/DEVICE_GROUP_SPLITTING.md` §Troubleshooting).
+   (`docs/DEVICE_GROUP_SPLITTING.md` §Troubleshooting). Which export an operator should take, and how to
+   get one, has one owner, [USAGE_GUIDE.md](USAGE_GUIDE.md) §Which export a run needs, so this fact names
+   the shapes it measures and links to that section.
 4. Measured against the published PAN-OS API documentation, page "XML and XPath", on three version
    legs: the 9.1 (EoL) leg and the 11.1 & Later leg, read 2026-11-23, and the 10.2 leg, read
    2026-11-24. Each leg states the four node types — root, element, attribute, text — and the entry

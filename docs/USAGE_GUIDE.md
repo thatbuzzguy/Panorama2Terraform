@@ -28,10 +28,45 @@ key and connects to no server.
   external command the gate runs, the way it runs terraform. The Terraform Language ruleset is bundled with the
   binary, so the rule set needs no `--init` and no plugin install. The measured facts the pins hold were measured
   on tflint 0.66.0 with the bundled ruleset 0.17.0.
-- A Panorama XML export.
+- A Panorama XML export. Which export a run needs is in [Which export a run needs](#which-export-a-run-needs).
 
 No installation step. Run the script from the repository. The API source needs no
 package: it uses `urllib`, so the https rules below are the tool's own.
+
+## Which export a run needs
+
+Check the export before you run either script, because the two exports are two shapes and the splitter reads only
+one of them. The shapes are rows of the input shape table ([`../src/input_shapes.py`](../src/input_shapes.py),
+[INPUT_SHAPES.md](INPUT_SHAPES.md) §3), so this section names them and holds no row wording, and
+[INPUT_SHAPES.md](INPUT_SHAPES.md) §1 fact 3 is the measurement that reads them from committed bytes. This section
+is the owner of the rule about which export a run needs, and every other document links to it.
+
+- The export taken from Panorama is the one a run needs for device groups: it holds the device-group rows that
+  `split_device_groups.parse_device_groups` reads, so the splitter has rows to split, and the converter reads the
+  file either way.
+- The export taken from one managed device is the one a run needs for that device's own config: it holds the
+  entries under the device entry and no device-group row, so `split_device_groups.parse_device_groups` answers none
+  for it, the splitter prints the fact it read and exits non-zero, and the converter reads it directly because its
+  row names `panorama_to_terraform.py` as the entry point that accepts the shape.
+
+The pins that read the two shapes read them from bytes and not from a file name:
+`tests/test_build_kitchen_sink.py::test_the_committed_shape_pair_is_read_by_rule_and_not_by_name` for the committed
+pair, and `tests/test_input_shapes.py` for each row through the owner its row names. The splitter's answer for the
+device export is held by
+`tests/test_split_device_groups.py::test_the_splitter_prints_the_fact_it_read_for_a_file_with_no_device_group_row`.
+
+How to get each one:
+
+- From Panorama: `export config from panorama` on the command line; or the web UI path Device -> Setup ->
+  Operations, with the snapshot saved on Panorama itself and the XML extracted from it; or the API `export` request
+  for the whole configuration, which `--source api --host panorama` reads through the same input door.
+- From one device: `export config from device <serial>`, or `show config running` after
+  `set cli config-output-format xml`. A web UI snapshot saved on a managed device gives this export.
+
+Which file form the UI download writes, and which export a bundle holds, are facts a live target states and are
+recorded in [`../backlog.md`](../backlog.md), so this section states no fact for them. A compressed export is read
+through the archive producer behind the input door, whose rules are [INPUT_SHAPES.md](INPUT_SHAPES.md) §2, so this
+section states no rule for that shape.
 
 ## Running the converter
 
@@ -245,7 +280,8 @@ python3 src/split_device_groups.py export.xml --output-dir split_output
 | `--max-input-bytes N` | The same input check as the converter |
 
 How the splitter joins a device group to a template is in
-[DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md). The splitter writes XML,
+[DEVICE_GROUP_SPLITTING.md](DEVICE_GROUP_SPLITTING.md). The splitter reads the export taken from Panorama, as
+[Which export a run needs](#which-export-a-run-needs) states. The splitter writes XML,
 so it has no `.tf` output and no gate run.
 
 ## Output files
@@ -628,7 +664,7 @@ Four things explain the shape of the output:
 | Duplicate local resource names | A true duplicate of the same identity. The generator adds a numeric suffix so the output stays valid HCL. Two different identities never need it. |
 | `terraform validate` reports an unknown `location` sub-block | The gate checks presence only, not shape. Read `LOCATION_SCHEMA` in `resource_mapping.py`; `terraform validate` accepts an unknown sub-block and drops it silently. |
 | Apply fails with "not found" | The referenced object exists in another tenant, so the converter left the name as a plain string. Create it, or point the provider at the right device group. |
-| Splitter states zero `device-group/entry` rows | The export came from a firewall, not Panorama, which is the firewall export row of [`../src/input_shapes.py`](../src/input_shapes.py). The run prints the fact it read and exits non-zero. Run the converter on it directly. |
+| Splitter states zero `device-group/entry` rows | The export came from a firewall, not Panorama, which is the firewall export row of [`../src/input_shapes.py`](../src/input_shapes.py), and [Which export a run needs](#which-export-a-run-needs) states which export each script reads. The run prints the fact it read and exits non-zero. Run the converter on it directly. |
 | Splitter copies no template | No device appears in both the device group and the template. The splitter prints the fact. Fix the export, or copy the template section by hand. |
 
 ## Extending the converter
