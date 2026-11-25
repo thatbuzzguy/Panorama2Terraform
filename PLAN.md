@@ -104,14 +104,16 @@ Two more decisions, taken 2026-11-24, are in the design record §2:
    refused by the determinism rule (§6).
 5. **The provenance bytes.** For an archive read the record names the decompressed bytes, because the record names
    the bytes the door checked and the door checks the decompressed bytes. `SourceOrigin.kind` names the archive, and
-   the member name enters the record as a field the file case does not have. The cache rule for an archive entry is
-   not decided, so Piece 13B.3 decides it with its owner.
+   the member name enters the record as a field the file case does not have. The cache rule reads through the owner
+   that already states it, `source_fetch.py` (`docs/ARCHITECTURE.md` §3.3), so no rule is stated twice, and the
+   condition that differs is the measurement in the design record §1 fact 6.
 
 Decision 2 landed 2026-11-24 with Piece 13B.2, through `xml_input.parse_archive`, so the cap is applied while the
-bytes expand and the accepted shape rows and the decompression row are held, measured through the producer. The shape
-table has its owner module since Piece 13A.1, so each rule that still needs an owner is a pending row that names the
-piece, and a decision that is taken moves its row in the same commit. Decision 4's refusal still has no owner, so its
-row stays pending until Piece 13B.4 writes it.
+bytes expand and the accepted shape rows and the decompression row are held, measured through the producer. Decision 5
+landed the same day with Piece 13B.3, through `provenance.record_for` and the origin the producer states, so the
+record row is held and measured through the record build rule. The shape table has its owner module since Piece 13A.1,
+so each rule that still needs an owner is a pending row that names the piece, and a decision that is taken moves its
+row in the same commit. Decision 4's refusal still has no owner, so its row stays pending until Piece 13B.4 writes it.
 Measured on three legs of the "XML and XPath" page — the 9.1 (EoL) leg and the 11.1 & Later leg on 2026-11-23,
 and the 10.2 leg on 2026-11-24 — the node model and the entry shape are the same on each, so the read layer agrees
 with the documented shape on all three. The 10.2 leg was read through a stored capture, because its live address

@@ -272,7 +272,7 @@ directory, so a table row names the file, not the path.
 | `imports.tf` | One `import` block per entry the run declares, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a run that declares `--import-blocks` and has a block to write (F6.4) |
 | `actions.tf` | One `action` block per action the pinned provider schema declares, for each unit the manifest names: the commit, then the push. Written last, and only when it has content (F6.7, F6.10.4) |
 | `README.md` | Deployment steps for the generated directory, plus the section that names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars` (F6.10.4) |
-| `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes. Written at the codebase root, which is the output directory, and it is the file the `--prune-cache` action reads |
+| `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, member, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes. Written at the codebase root, which is the output directory, and it is the file the `--prune-cache` action reads |
 | `MANUAL_SETUP_REPORT.txt` | Report-only configuration, plus a section for a container no parse method reads, and the routing entries the `protocol` object cannot express ([ARCHITECTURE.md](ARCHITECTURE.md) §4.9) |
 | `INTERFACE_MIGRATION_REPORT.txt` | Interface and IP inventory |
 | `VPN_MIGRATION_REPORT.txt` | VPN inventory and the pre-shared key actions |
@@ -306,6 +306,7 @@ reads one source writes one record, and the bytes are the same as the single-rec
 ```text
 kind: api
 name: 6cf3d2e1....xml
+member: -
 path: panorama_cache/6cf3d2e1....xml
 scope: whole-config
 request: panorama?category=configuration&type=export
@@ -315,7 +316,9 @@ sha256: 9b1c...
 ```
 
 - `kind`, `name`, `path` name the bytes you can reopen. `path` is the path the run received,
-  so a record written from another directory names a different path.
+  so a record written from another directory names a different path. For an archive read `kind` names `archive` and
+  `member` names the member the run read; every other source kind writes `-` for `member`, so the record shape reads
+  the same for both.
 - `scope` names the scope the source holds: `whole-config` when the producer declares none, or the
   declared path (`device-group/entry/Production-DG`, no leading slash) for a per-scope run. A run
   with a declared parent writes a second record for it, so each record names the source the shadow
@@ -326,7 +329,8 @@ sha256: 9b1c...
   record reference nothing: the `--prune-cache` action prunes nothing for them and protects nothing.
   The record never names the API key.
 - `size` and `sha256` are measured on the bytes the input door parsed, so the record names
-  the bytes the report lines describe, not a file that changed after the run.
+  the bytes the report lines describe, not a file that changed after the run. For an archive read those are the
+  decompressed bytes, so the record names what the run read rather than the compressed file on disk.
 - The record directory is the output directory, so the action reads the record file the same run wrote.
   `SOURCE.txt` is a codebase root-set file ([CODEBASE_ASSEMBLY.md](CODEBASE_ASSEMBLY.md) §14), and no
   module states a path rule for a record directory. `--prune-cache` is the step that reads that file, and

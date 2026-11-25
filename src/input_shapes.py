@@ -38,7 +38,10 @@ Seven rules, stated once here. The table is data, so a document links to it and 
    limit, so the size half of a refusal reads as a plain byte count. An archive row shows its shape as the compressed
    stream, because the shape is the stream and not the text inside it, so its content is one literal stream and no
    call builds it. The decompression row's content is the smallest stream that shows the shape: it is under the limit
-   the pins measure it against, and it expands past that limit, so the refusal can only come from the expansion.
+   the pins measure it against, and it expands past that limit, so the refusal can only come from the expansion. The
+   record row shows the two facts its owner reads: a stream that states a member name, and content that expands to
+   the bytes another row shows, so the pins read the record's byte facts as another row's content and hold no number
+   of their own.
 """
 
 # One row shape, read by the pins and named by the `docs/ARCHITECTURE.md` §1 rule column.
@@ -271,11 +274,17 @@ SHAPE_TABLE = (
     },
     {
         "shape": "the decompressed bytes an archive read names in the provenance record",
-        "content": b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x00not xml",
-        "entry_point": "none",
+        # The smallest stream that shows the two facts the record reads for an archive read. The flags byte names
+        # the name field, so the stream states a member, and the member is a stored block that holds the accepted
+        # row's content, so the bytes the door checks are bytes another row shows and not the stream itself.
+        "content": (
+            b'\x1f\x8b\x08\x08\x00\x00\x00\x00\x00\x00x\x00\x01=\x00\xc2\xff<?xml version="1.0"?>'
+            b'\n<config><entry name="host-1"/></config>Q\x9d:\xd2=\x00\x00\x00'
+        ),
+        "entry_point": "every entry point",
         "printed_line": "",
-        "status": "pending",
-        "pending_on": "Piece 13B.3",
-        "measured_through": "",
+        "status": "held",
+        "pending_on": "",
+        "measured_through": "provenance.record_for",
     },
 )

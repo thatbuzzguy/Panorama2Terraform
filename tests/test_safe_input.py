@@ -620,7 +620,11 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
     F3.8 pinned that no entry point keeps its own check. F5.1 pins that no producer
     keeps its own check either: every producer hands its bytes to the boundary. An
     accepted shape is handed to the boundary as the bytes the producer expanded, so the
-    checks run on those bytes and not on the compressed stream.
+    checks run on those bytes and not on the compressed stream. The origin the door gets
+    for an accepted read names the archive, through the kind the producer states, so the
+    record reads one definition of the kind for both shapes: the accepted single-member
+    stream names the archive, and the two-member stream the producer does not accept keeps
+    the kind its producer states.
     """
     source = tmp_path / "in.xml"
     data = f'<?xml version="1.0"?>\n{BODY}'.encode()
@@ -639,13 +643,28 @@ def test_file_producer_runs_the_checks_through_the_boundary(xml_input_module, tm
     assert parsed.origin.kind == "file"
     assert parsed.origin.path == source
 
-    # The same producer, the same boundary, for a shape the producer expands.
+    # The same producer, the same boundary, for a shape the producer expands. The origin kind for an accepted read is
+    # the kind the producer states, `ARCHIVE_KIND`, so a record built from this source names the archive, and the
+    # member fact is read through the origin as well. `gzip.compress` states no name, so this stream names no member.
     archive = tmp_path / "in.bin"
     archive.write_bytes(_one_member(data))
     calls.clear()
     parsed = xml_input_module.parse_xml(archive)
-    assert calls == [(len(data), "file", archive.name)], calls
+    assert calls == [(len(data), xml_input_module.ARCHIVE_KIND, archive.name)], calls
+    assert parsed.origin.member is None, "a stream that states no name leaves the origin stating no member"
     assert parsed.root.tag == "config", "the door parsed the bytes the producer expanded"
+
+    # A shape the producer does not accept keeps the kind its producer states, because no member was read for it. The
+    # two-member stream is not an accepted shape, so the bytes reach the door unchanged and the parse answers them.
+    two = tmp_path / "two.bin"
+    two.write_bytes(_one_member(data) + _one_member(data))
+    calls.clear()
+    with pytest.raises(ET.ParseError):
+        xml_input_module.parse_xml(two)
+    assert calls == [(len(two.read_bytes()), "file", two.name)], (
+        calls,
+        "a shape the producer did not expand keeps the kind its producer states",
+    )
 
 
 def test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands(xml_input_module, monkeypatch):

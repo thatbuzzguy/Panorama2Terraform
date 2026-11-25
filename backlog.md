@@ -744,9 +744,27 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   the pins read the table through `ast`, so no call may build a row's content. The pins measure the decompression row
   against a limit they hold as their own constant, which sits between the row's content and what that content expands
   to; the row states no byte count, because the pins cannot read an expansion as a content size, and §3 rule 2 forbids
-  a row stating a number the pins cannot read from it. What stays open is the cache rule and the record field the
-  member name enters, which Piece 13B.3 decides, and the member-selection argument and the refusal it prints, which
-  Piece 13B.4 writes.
+  a row stating a number the pins cannot read from it. What stays open is the member-selection argument and the
+  refusal it prints, which Piece 13B.4 writes.
+
+- Finding, measured 2026-11-24 on Piece 13B.3: the record row is the first held row whose answer is not a printed
+  line, so the pins measure it as data. `tests/test_input_shapes.py::_answer` answers an exception for every other
+  held row, because `docs/INPUT_SHAPES.md` §3 rule 1 compares the printed line with the row. The record row states no
+  line, so its pin calls `provenance.record_for` with the source the producer returned for its content and reads the
+  record back through `provenance.parse_record`, which is the fact that makes it held. The pins now hold two answer
+  shapes, a refusal and a record, so a pending row whose owner answers a record needs the same branch in `_answer`.
+  The same pin reads the accepted archive rows by the bytes their content shows, so the record row enters the set with
+  the two archive rows: the set is three rows, decided by content and not by which fact each row states, which is what
+  §3 rule 4 asks for, because a row that names a build fact can only be read through the owner it names. Owner:
+  `docs/INPUT_SHAPES.md` §3 rules 1 and 4.
+
+- Finding, measured 2026-11-24 on the gate for Piece 13B.3: one full run answered 1,557 passed, 4 skipped and 287
+  errors, and the same tree answered 1,844 passed and 4 skipped on the run after it. The 287 are the pins that read
+  the provider schema through `tests/conftest.py::provider_schemas`, which is one session fixture and asserts on a
+  failed `terraform init` rather than skipping, so one failed init answers as an error for every pin that reads it.
+  The rule is the one the fixture states, so nothing is wrong; the cost is that one run can report 287 failures for
+  one network answer. A fixture that reads the answer once and reports which pins it served would separate the two.
+  Owner: `tests/conftest.py::provider_schemas`, `docs/ARCHITECTURE.md` §1.1.
 
 - Finding, measured 2026-11-24 on the 10.2 leg of the "XML and XPath" page. The live page address
   `https://docs.paloaltonetworks.com/pan-os/10-2/pan-os-panorama-api/about-the-pan-os-xml-api/structure-of-a-pan-os-xml-api-request/xml-and-xpath`

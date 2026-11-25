@@ -43,6 +43,20 @@ refused or read. The document index is in [README.md](README.md). The read rule 
    read through the stored capture of its page address (capture `20250602181153`, the page the site
    stated on 2024-03-20), because the live address for that leg answers a redirect; the redirect, the
    date, and the address that answered are the finding in `backlog.md`.
+5. **The record row is read through the record build rule its owner names**, `provenance.record_for`, so the fact
+   the pins measure is the record a run builds and not a line the table states. For an archive read the record names
+   the archive through `xml_input.ARCHIVE_KIND`, the member through `SourceOrigin.member`, and the byte facts name
+   the decompressed bytes the door checked, because the byte facts come from the door and the producer hands the
+   expanded bytes to it. The record reads back as itself through `provenance.parse_record`, which is what makes the
+   row held, because a row is measured only when a pin can call its owner. No committed golden holds a record, so
+   the pins build the record they read from a row's content. Pinned by
+   `tests/test_input_shapes.py::test_the_record_row_is_measured_through_the_record_build_rule` and
+   `tests/test_provenance.py::test_an_archive_record_names_the_archive_the_member_and_the_decompressed_bytes`.
+6. **The cache rule reads through its existing owner** (`docs/ARCHITECTURE.md` §3.3), and the condition that
+   differs is a measurement rather than a rule: `source_fetch.fetch()` runs the checks through `parse_bytes` and
+   never through the archive producer, so no archive read reaches a cache entry today, and a record built for an
+   archive read states `-` for the cache field and references nothing, the same way a state record does. Pinned by
+   `tests/test_provenance.py::test_an_archive_record_references_no_cache_entry`.
 
 ## 2. The archive producer (decision, 2026-11-23; rules 4 and 5 taken 2026-11-24)
 
@@ -78,12 +92,16 @@ owner, landed by Piece 13B.2 on 2026-11-24. Rule 4 and rule 5 are the two decisi
    declaration is held by the CLI, not by a rule owner, so no module states a member rule the CLI
    holds instead. The shape is still read from the bytes, so this decision changes no rule about
    a name.
-5. **Taken 2026-11-24, the provenance bytes.** For an archive read the record names the
-   decompressed bytes, because F5.3 states that the record names the bytes the door checked and
-   rule 1 states that the door checks the decompressed bytes. `SourceOrigin.kind` names the
-   archive, and the member name enters the record as a field the file case does not have. What
-   stays open is the cache rule — how the rule that the cache holds the bytes the boundary parsed
-   reads for an archive — which Piece 13B.3 decides with its owner.
+5. **Taken 2026-11-24, landed with Piece 13B.3, the provenance bytes.** For an archive read the record names the
+   decompressed bytes, because F5.3 states that the record names the bytes the door checked and rule 1 states that
+   the door checks the decompressed bytes. `SourceOrigin.kind` names the archive, through `xml_input.ARCHIVE_KIND`
+   as the producer's own kind constant, and the member name enters the record as a field the file case does not
+   have, read through `SourceOrigin.member`, so the record module states no shape rule of its own and reads both
+   facts through the origin the producer states. The cache rule is read through the owner that states it,
+   `source_fetch.py` (`docs/ARCHITECTURE.md` §3.3): an archive record comes through the file producer, so it states
+   `-` for the cache field, and the condition that differs is the measurement in §1 fact 6. Pinned by
+   `tests/test_provenance.py::test_an_archive_record_names_the_archive_the_member_and_the_decompressed_bytes` and
+   `tests/test_provenance.py::test_an_archive_record_references_no_cache_entry`.
 
 ## 3. The shape table (rules, Piece 13A.1, 2026-11-24)
 
@@ -100,9 +118,12 @@ which `tools/check_documents.py` reports. Every document that describes a shape 
    `state_input.parse_state`, and the console line from `container_coverage.console_line` with the fact phrase and the
    block header of the entry point that read the fact. A row names its owner in `measured_through`, and
    `tests/test_input_shapes.py` measures the row by running the row's content through that owner and comparing the
-   printed line with the row. A pending row names no owner, because the rule it waits for has no owner yet. A console
-   line row holds no prefix, because the prefix is the part `container_coverage` states, so the pin reads the prefix
-   through that owner and holds that the table holds no copy of the shape.
+   printed line with the row. The record row's owner is the record build rule, `provenance.record_for`, so that row
+   is measured by building the record the run would write for its content and reading the record back through the
+   same module, because a record row states no printed line of its own. A pending row names no owner, because the
+   rule it waits for has no owner yet. A console line row holds no prefix, because the prefix is the part
+   `container_coverage` states, so the pin reads the prefix through that owner and holds that the table holds no copy
+   of the shape.
 2. **The parts of a line the pins measure are the origin and the byte counts**, held as `{origin}`, `{size}` and
    `{limit}`. Every other part of a line is the row's own wording, so the pin compares the whole line. A part the
    row's own content shows — the DTD name, a parse answer, the position and the identity a console line names — is

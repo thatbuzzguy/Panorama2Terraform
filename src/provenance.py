@@ -5,9 +5,9 @@ the parent record.
 Seven rules, stated once here.
 
 1. What the record states, in this field order: the source kind, the source name, the
-   path, the scope the source holds, the request identity, the cache entry, the size of
-   the bytes, and the SHA-256 hex of those bytes. A field that does not apply to the
-   source kind is `-`, so one shape reads.
+   member an archive read took, the path, the scope the source holds, the request identity,
+   the cache entry, the size of the bytes, and the SHA-256 hex of those bytes. A field that does not apply to the
+   source kind is `-`, so one shape reads, and the member field is the one field the file case does not have.
 2. The record is data: one `field: value` line per field, in the fixed order, with no
    prose and no timestamp. A timestamp would make two runs on the same bytes differ,
    which the determinism rule does not allow. `parse_record` reads one record and
@@ -66,7 +66,7 @@ PROVENANCE_FILE = "SOURCE.txt"
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_record` reads the record back as itself.
-FIELD_ORDER = ("kind", "name", "path", "scope", "request", "cache_entry", "size", "sha256")
+FIELD_ORDER = ("kind", "name", "member", "path", "scope", "request", "cache_entry", "size", "sha256")
 
 # The value for a field that does not apply to the source kind, so one shape reads.
 ABSENT = "-"
@@ -78,6 +78,7 @@ class ProvenanceRecord:
 
     kind: str
     name: str
+    member: str
     path: str
     scope: str
     request: str
@@ -92,17 +93,19 @@ def record_for(
     """Build the record for one source the run read, from the source the door returned and
     the request it read.
 
-    The origin already carries the kind, the report name and the path, so the record does
-    not restate a naming rule. The request carries the identity and the entry name; a file
-    source and a state source have no request, so those two fields are `-`. `scope` is the
-    fact the door records: `whole-config`, the declared path of a per-scope source (F5.4), or
-    the declared workspace of a state source (F5.6). Both door shapes state the same four
-    record facts, so no new field is needed.
+    The origin already carries the kind, the report name, the path, and the member an archive
+    read took, so the record restates no naming rule and reads no shape of its own. The request
+    carries the identity and the entry name; a file source and a state source have no request, so
+    those two fields are `-`. `scope` is the fact the door records: `whole-config`, the declared
+    path of a per-scope source (F5.4), or the declared workspace of a state source (F5.6). Both
+    door shapes state the same four record facts, so no new field is needed for them, and an origin
+    that names no member writes `-` through the rule this module states.
     """
     path = source.origin.path
     return ProvenanceRecord(
         kind=source.origin.kind,
         name=source.origin.name,
+        member=source.origin.member if source.origin.member is not None else ABSENT,
         path=str(path) if path is not None else ABSENT,
         scope=source.scope,
         request=request.canonical() if request is not None else ABSENT,

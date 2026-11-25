@@ -19,7 +19,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | File | Role | Rule it keeps |
 |---|---|---|
 | `panorama_to_terraform.py` | The converter: `PanoramaParser` (model), `TerraformGenerator` (model and write), `main()` (order) | the parser consumes only the producer contract (`ParsedSource`); it reads no file and opens no connection itself, so a source is either the file producer or the api producer; the entry point owns the reference read of the records a codebase already holds, through the readers, the path rule, the merge rule and the unit rule their owners state (`MULTI_RUN_CODEBASE.md` §4 rule 1) |
-| `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`); `parse_archive` is the producer for a compressed shape, so it adds no check and the cap is applied while the bytes expand |
+| `xml_input.py` | The only input read, shared by every entry point, through one producer boundary (F5.1), and the scope vocabulary a source states (F5.4) | the two byte checks are one function (`check_bytes`) every source kind runs, so the size cap and the DTD refusal are kind-independent and only the parse step is chosen by the kind; one definition of the scope a source holds (`DEFAULT_SCOPE`) and of the path segment that names an entry (`ENTRY_SEGMENT`); `parse_archive` is the producer for a compressed shape, so it adds no check and the cap is applied while the bytes expand; for an accepted read the producer states the archive kind (`ARCHIVE_KIND`) and the member it read on the origin, so a record names both through `SourceOrigin` and no module states a second naming rule |
 | `input_shapes.py` | The input shape table (Epic 13): one row per byte shape, the entry point that accepts it, and the line the run prints for it, as data | the table is data, so a document links to it and restates no row (`INPUT_SHAPES.md` §3); the row shape is `SHAPE_ROW_FIELDS`, and `tests/test_input_shapes.py` measures each held row through the owner the row names in `measured_through`; the module states no check, no reader, no parser, no writer, no console line, no naming rule, no environment name, and no control-character set, so every line is the measured wording of the module that builds it, and a pending row states no line because no line exists for it yet |
 | `source_fetch.py` | The api producer (F5.2): the https request, the cached copy, the response wrapper, and the three accepted request shapes (F5.4, F8.1) | https only; a redirect that changes the scheme is refused; the cache holds exactly the bytes the boundary parsed; the key comes from the environment only, and `API_KEY_ENV` is the only module that states its name (`CODEBASE_ASSEMBLY.md` §11); the declared path or the declared command is part of the request identity, so each scope and each command gets its own entry; a command value reaches the URL encoded |
 | `api_requests.py` | The scope index (F8.2), the response-to-request join (F8.3), the section-to-response join (F8.5), and the unit join (F8.7): one entry per scope the run read, the request that reads its response, each response read against the entry whose request made it, and the pair between a unit and the entry that asked for the response its rows name | the scope set is read from the membership responses through the four `parse_associations` lists, so no scope is guessed and no request is made for a scope the run did not read; two levels only, sorted order, one entry per scope; a response is accepted only when the element it holds is the element its own request names, read through `source_fetch.py`, and the entry name inside it agrees with the index; the path is read through `xml_input.ENTRY_SEGMENT` and `container_coverage.is_scope_path`, so no second path rule exists; the unit set is read through `unit_manifest.units` and the row's source field name through `ownership.SOURCE_FIELD`, so the module names no field of its own and states no second unit rule; the module reads no source and no membership of its own and states no naming rule, writer, console line, or environment name |
@@ -32,7 +32,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
 | `state_coverage.py` | The state scan (§3.2): the ownership fact and the drift fact | the matrix row is the same table the property scan uses, keyed by the resource type; the ownership key is §2.1 identity with the declared facts, never the `Shared` fallback; the scan is not an output, so it reads captured values without recording |
 | `sanity_checks.py` | The post-run sanity gate (F4.1): each static rule stated once | the gate reads the written files, not the generator's state, with two exceptions: the cross-check reads the run's ledger as well, and the request-set rule reads the run's ledger and the scope index, because both facts compare two sets (§4.6); one block reader serves every block kind a rule reads, so a fact about a block is reported once; the two checks that run an external command run once per unit directory the run wrote, read through `unit_manifest.units` over the rows its own ledger read, which for a single run is the same set as the record names (`MULTI_RUN_CODEBASE.md` §5 rule 4), so the report prints one result for each directory and names it |
-| `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4), and the prune action `--prune-cache` gates | the record states the bytes the door parsed and never the credential; the cache reference a prune action reads is the `cache_entry` field, not a printed line; the record file is a codebase root-set file, so the action reads the record file the same run wrote |
+| `provenance.py` | The provenance record (F5.3): what the run read, as `SOURCE.txt`, one record per source read (F5.4), and the prune action `--prune-cache` gates | the record states the bytes the door parsed and never the credential, and `record_for` builds it from the origin the producer states, so the module reads no shape of its own; the cache reference a prune action reads is the `cache_entry` field, not a printed line; the record file is a codebase root-set file, so the action reads the record file the same run wrote |
 | `naming.py` | The §5 sanitizing rule, stated in one module (F6.6): the shape a PAN-OS name takes when it becomes a Terraform name, and the `var.` text a block prints for a site value | one rule, three callers: the local name of a block, the unit directory name, and the variable name of a site value. The gate reads it without the generator, so `TerraformGenerator.sanitize_name` is a delegate and every other module takes the rule as an argument or reads it here |
 | `unit_manifest.py` | The unit as data (F6.1): one row per declared scope, as `CODEBASE_MANIFEST.json` (§3.4) | the rows come from the ledger, so the module adds no parse data; it takes the §5 naming rule as an argument, so no second naming rule exists; the reference names arrive from §4.3, so this module resolves no name; `units` is the one unit rule over either row set — the rows the ledger read, or the rows a record read back through `parse_rows` (`MULTI_RUN_CODEBASE.md` §2 rule 5), pinned by `tests/test_unit_manifest.py::test_the_codebase_unit_set_is_read_through_the_one_unit_rule` |
 | `ownership.py` | The owner of a repeated name (F6.2): one row per entry a matrix row covers, as `OWNERSHIP.json` (§3.5), and the report finding for a case the rule cannot decide | the row scope is the F4.4 rule read through the report row, so no second scope rule exists; the identity key and the naming rule are read through `state_coverage` and `unit_manifest`, so no second key or naming rule exists; `disable_override` names the entry that cannot be overridden, not the owner; the scan reads a captured value without recording |
@@ -356,10 +356,16 @@ reads it (`COVERAGE_MATRIX.md` §1). The gap that has no rule yet is recorded in
    are not an accepted shape reach the door unchanged and the parse answers them with the line the shape table holds
    (`docs/INPUT_SHAPES.md` §2 rule 3), and it opens no file, so the read-once rule holds for an archive read as it
    holds for a producer with no file behind it. Only one member is accepted today, because the member rule
-   (`docs/INPUT_SHAPES.md` §2 rule 4) has no owner yet. Pinned by `tests/test_safe_input.py`, including
+   (`docs/INPUT_SHAPES.md` §2 rule 4) has no owner yet. For an accepted read the producer states the two origin
+   facts a record reads: the archive kind through `ARCHIVE_KIND`, as `SOURCE_KIND` and `STATE_KIND` are stated by
+   their producers, and the member name the shape itself states, read through `SourceOrigin.member`, so
+   `provenance.record_for` names the archive and the member without stating a naming rule or a `-` rule of its own.
+   Pinned by `tests/test_safe_input.py`, including
    `tests/test_safe_input.py::test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands`,
-   `tests/test_safe_input.py::test_the_cap_stops_the_expansion_before_a_tree_is_built`, and
-   `tests/test_safe_input.py::test_the_archive_producer_opens_no_file`.
+   `tests/test_safe_input.py::test_the_cap_stops_the_expansion_before_a_tree_is_built`,
+   `tests/test_safe_input.py::test_the_archive_producer_opens_no_file`, and
+   `tests/test_safe_input.py::test_file_producer_runs_the_checks_through_the_boundary`, which reads the kind through
+   the producer's own constant for both shapes.
 
 2. **Parent map.** ElementTree keeps no parent pointers, so the parser builds a
    child → parent map once. The five scope facts walk that map.
@@ -664,9 +670,9 @@ console line names four parts, in this order, and nothing else:
 
 A console line names no fixed-width matrix-row column, so the matrix row stays in the report. The
 source field it may name is the minimum actionable part of the provenance record (§3.3): the source
-name, the same report value the report bodies use (F4.2 rule 6). The path, the kind, the request, the
-cache entry, the size and the hash are not on a console line, because a printed line protects nothing
-and the record is where the eight fields live. A block prints only when it has a finding, so a run with
+name, the same report value the report bodies use (F4.2 rule 6). The path, the kind, the member, the
+request, the cache entry, the size and the hash are not on a console line, because a printed line protects nothing
+and the record is where the nine fields live. A block prints only when it has a finding, so a run with
 no finding in that kind prints nothing new. Five kinds print: the container coverage finding, the gap
 entry, the property finding, the shadow line, and the splitter line, which names the fact its own row set
 read and fits the shape because it names one position, one identity and one fact. The ownership, state and
@@ -691,10 +697,12 @@ read order: the main source, then a declared parent source (F5.4), then the stat
 one-source run writes the same bytes as the F5.3 rule. For the second path one response is one source, so the
 record file holds one record per request the run read, in the order it read them, and the record module states
 no read rule for that order (`API_CONVERSION_PATH.md` §2.5). The record names the bytes a reader can
-reopen, so a report line can be checked against the file it describes. Eight fields, in this order:
-`kind`, `name`, `path`, `scope`, `request`, `cache_entry`, `size`, `sha256`. A field that does not
-apply to the source kind is `-`, so one shape reads. Records are separated by one blank line, which
-is the whole record shape. The rule lives in `provenance.py`.
+reopen, so a report line can be checked against the file it describes. Nine fields, in this order:
+`kind`, `name`, `member`, `path`, `scope`, `request`, `cache_entry`, `size`, `sha256`. A field that does not
+apply to the source kind is `-`, so one shape reads, and `member` is the field the file case does not have: the
+producer states no value for it, so the record writes `-` for a read that names no member. `record_for` builds
+the record from the origin, so the module reads no shape and no naming rule of its own. Records are separated by
+one blank line, which is the whole record shape. The rule lives in `provenance.py`.
 
 Five rules the record keeps:
 

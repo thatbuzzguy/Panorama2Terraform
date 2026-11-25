@@ -2,8 +2,8 @@
 
 Seven groups, one per acceptance rule:
 
-1. What the record states: the eight fields, the values a file run and an api run write,
-   and the byte facts measured by the door.
+1. What the record states: the nine fields, the values a file run and an api run write,
+   the member an archive read names, and the byte facts measured by the door.
 2. The record is data, and it is written outside the report bodies: the round trip, the
    refusal of a line that is not a field, and the report bodies keeping the name-only rule.
 3. The label change: one `Source:` label, printed by both report writers for both sources.
@@ -27,6 +27,7 @@ with `--offline`. The path 2 pins read every response through the injected produ
 `tests/test_api_requests.py` does, and the committed response set is read through it.
 """
 
+import ast
 import dataclasses
 import hashlib
 from pathlib import Path
@@ -36,6 +37,7 @@ import pytest
 import api_requests
 import container_coverage
 import entry_coverage
+import input_shapes
 import provenance
 import sanity_checks
 import write_path
@@ -125,6 +127,14 @@ def _run_api(converter_module, fetch_module, tmp_path, monkeypatch, cache_dir=No
         == 0
     )
     return cache, out
+
+
+def _shape_row(name: str) -> dict:
+    """One shape-table row, read as data through the module that owns the table, so this module holds no archive
+    bytes of its own and reads the shape from the table's content."""
+    rows = [row for row in input_shapes.SHAPE_TABLE if row["shape"] == name]
+    assert len(rows) == 1, (name, "the table states each shape once")
+    return rows[0]
 
 
 def _record(out_dir) -> provenance.ProvenanceRecord:
@@ -227,12 +237,55 @@ def _path_2_run(converter_module, fetch_module, cache, out, monkeypatch):
 # --- 1. What the record states ------------------------------------------------
 
 
+def test_an_archive_record_names_the_archive_the_member_and_the_decompressed_bytes(tmp_path):
+    """Piece 13B.3, decision 5 read through its owner (`docs/INPUT_SHAPES.md` §2 rule 5): for an archive read the
+    record names the decompressed bytes, because the byte facts come from the door and the door checks the bytes the
+    producer handed it, which for an accepted shape are the expanded bytes. `kind` names the archive through the kind
+    the producer states, and `member` names the member the stream states, read through the origin, which is the one
+    definition the record reads. The pins read the shape through the table's own content, so this module holds no
+    archive bytes of its own, and the byte facts are read against the content the accepted row shows. The file case
+    states `-` for the member field, through the `-` rule this module states.
+    """
+    record_row = _shape_row("the decompressed bytes an archive read names in the provenance record")
+    accepted_row = _shape_row("XML bytes, no DTD, within the input limit")
+    path = tmp_path / "input"
+    path.write_bytes(record_row["content"])
+    origin = xml_input.SourceOrigin.for_path(path)
+    source = xml_input.parse_archive(record_row["content"], origin)
+    record = provenance.record_for(source)
+
+    assert origin.member is None, "the origin handed to the producer names no member, so the read produced it"
+    assert record.kind == xml_input.ARCHIVE_KIND, "the record names the archive through the kind the producer states"
+    assert record.member == source.origin.member, "the record reads the member through the origin"
+    assert record.member != provenance.ABSENT, "the stream states a member name"
+    assert record.name == origin.name and record.path == str(origin.path), "the producer changed no name rule"
+
+    # The byte facts name the bytes the door checked, which are the expanded member and not the stream the row shows.
+    data = accepted_row["content"]
+    assert record.size == len(data), "the size names the bytes the door checked, not the compressed stream"
+    assert record.size != len(record_row["content"]), "the record names no size of the stream"
+    assert record.sha256 == hashlib.sha256(data).hexdigest(), "the byte facts come from the door"
+    assert provenance.parse_record(provenance.render(record)) == record, "the record reads back as itself"
+    assert len(provenance.render(record).splitlines()) == len(provenance.FIELD_ORDER), (
+        "the archive record prints one line for each field the shape states",
+    )
+
+    # The case that has no member: the field reads `-` through the rule this module states.
+    file_record = provenance.record_for(xml_input.parse_bytes(data, origin))
+    assert file_record.kind == "file"
+    assert file_record.member == provenance.ABSENT, "the file case has no member"
+    assert len(provenance.render(file_record).splitlines()) == len(provenance.FIELD_ORDER), (
+        "the file record prints the same lines, with `-` for the member",
+    )
+
+
 def test_the_record_field_names_are_the_printed_keys():
     """A tool reads the record as data, so a printed key must be a field name."""
     names = tuple(field.name for field in dataclasses.fields(provenance.ProvenanceRecord))
     assert names == provenance.FIELD_ORDER, names
     assert "key" not in names, "the record states no credential"
-    assert len(provenance.FIELD_ORDER) == 8, provenance.FIELD_ORDER
+    assert len(provenance.FIELD_ORDER) == 9, provenance.FIELD_ORDER
+    assert "member" in names, "the record states the member an archive read took"
 
 
 def test_a_file_run_record_names_bytes_a_reader_can_reopen(tmp_path):
@@ -371,7 +424,7 @@ def test_the_record_file_holds_one_record_per_source_read(converter_module, fetc
 
 
 def test_a_path_2_record_file_reads_back_with_no_new_field(converter_module, fetch_module, tmp_path, monkeypatch):
-    """AC-1.2: the eight fields and the fixed order are unchanged, so `parse_records` reads a path 2 record
+    """AC-1.2: the nine fields and the fixed order are unchanged, so `parse_records` reads a path 2 record
     file back as itself, with no field outside the declared shape, and a second run that read the same
     requests writes the same record bytes.
     """
@@ -507,6 +560,38 @@ def test_a_printed_parent_source_is_not_a_reference(converter_module, fetch_modu
     assert parent.name in (out / entry_coverage.REPORT_FILE).read_text(encoding="utf-8"), (
         "the shadow line shows the name, and that line is not a reference"
     )
+
+
+def test_an_archive_record_references_no_cache_entry(tmp_path, fetch_module):
+    """Piece 13B.3, the cache rule read through the owner that states it, `source_fetch.py` (`docs/ARCHITECTURE.md`
+    §3.3): an archive record comes through the file producer, so it states `-` for the cache field,
+    `cache_reference` answers None, and `prunable_entries` prunes nothing for it, the same way a state record does.
+    The rule needs no archive branch, because the condition that differs is a measurement and not a rule: the api
+    producer runs the door through `parse_bytes` and never through the archive producer, so no archive read reaches a
+    cache entry today, and the entry that would be written holds the bytes as they arrived, which no record names. The
+    pins read the producer through `ast`, so this is the fact the owner states and not a guess.
+    """
+    record_row = _shape_row("the decompressed bytes an archive read names in the provenance record")
+    path = tmp_path / "input"
+    path.write_bytes(record_row["content"])
+    source = xml_input.parse_archive(record_row["content"], xml_input.SourceOrigin.for_path(path))
+    record = provenance.record_for(source)
+    assert record.cache_entry == provenance.ABSENT, "the record names no cache entry for an archive read"
+    assert provenance.cache_reference(record) is None, "a field that does not apply references nothing"
+
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    entry = cache / "an-entry-no-record-references"
+    entry.write_bytes(record_row["content"])
+    assert provenance.prunable_entries(cache, [record]) == [entry], "the archive record prunes nothing itself"
+
+    calls = {
+        node.func.attr if isinstance(node.func, ast.Attribute) else node.func.id
+        for node in ast.walk(ast.parse(Path(fetch_module.__file__).read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call)
+    }
+    assert "parse_bytes" in calls, "the api producer runs the checks through the door"
+    assert "parse_archive" not in calls, "no archive read reaches a cache entry today"
 
 
 # --- 5. Determinism and the gate ---------------------------------------------
@@ -665,6 +750,7 @@ def test_the_prune_reads_the_record_file_and_not_the_records_the_run_built(tmp_p
     record = provenance.ProvenanceRecord(
         kind="api",
         name="source",
+        member=provenance.ABSENT,
         path="-",
         scope=xml_input.DEFAULT_SCOPE,
         request=provenance.ABSENT,
@@ -909,8 +995,9 @@ def test_a_state_record_protects_no_entry_when_the_action_runs(converter_module,
 def test_an_update_run_names_only_the_sources_the_door_read(tmp_path):
     """§4 rule 1: the record names what the door read, and a record read back through `parse_rows` is a data read,
     not a door source, so an update run that reads the codebase's existing records names none of them. It gains no
-    source kind, no field and no record entry: the field order is the eight fields it states today, and the run's
-    record is the record the same run would write with nothing to read.
+    source kind, no field and no record entry: the record shape is the field order the record module states, so the
+    run gains no field for a record it read as data, and the run's record is the record the same run would write
+    with nothing to read.
 
     Measured 2026-11-22 on the committed pair through `tests/conftest.py`: the kitchen-sink run is the codebase and
     `address_objects.xml` is the second run. The update run's record holds one record, kind `file`, name
@@ -930,9 +1017,8 @@ def test_an_update_run_names_only_the_sources_the_door_read(tmp_path):
     single = provenance.parse_records((standalone / provenance.PROVENANCE_FILE).read_text(encoding="utf-8"))
     assert update == single, "the reference read adds no record entry"
     assert [(record.kind, record.name) for record in update] == [("file", "address_objects.xml")], update
-    assert len(provenance.FIELD_ORDER) == 8, provenance.FIELD_ORDER
     assert "source" not in provenance.FIELD_ORDER and "read" not in provenance.FIELD_ORDER, (
-        "the record holds no field for a record the run read as data",
+        "the record holds no field for a record the run read as data, which the field order group 1 states",
     )
     text = (partial_dir / provenance.PROVENANCE_FILE).read_text(encoding="utf-8")
     assert [name for name, _module in sanity_checks.DATA_FILES if name in text] == [], (

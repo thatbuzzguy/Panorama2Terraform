@@ -14,13 +14,13 @@ owner its rule states, and Phase 13C needs no decision.
 
 ### Phase 13B, the archive producer
 
-Piece 13B.2 landed the owner its rule states, `xml_input.parse_archive`, on 2026-11-24, so the accepted shape rows
-and the decompression row are held and measured through it. Each remaining piece still needs its own owner: the two
-pending rows in `src/input_shapes.py` name these pieces. The member declaration is an operator argument held by the
-CLI, not by a rule owner, so it lands with the CLI argument rule that Piece 13B.4 writes.
-- **13B.3** — the provenance facts for an archive read: the origin kind, the member name as a field the file case
-  does not have, and how the cache rule reads for an archive. The record names the decompressed bytes, so the cache
-  rule is the part that stays open.
+Piece 13B.2 landed the owner its rule states, `xml_input.parse_archive`, on 2026-11-24, and Piece 13B.3 landed the
+record facts the same day through `provenance.record_for`, so the accepted shape rows, the decompression row and the
+record row are held and measured through their owners. The record names the decompressed bytes, `SourceOrigin.kind`
+names the archive through `xml_input.ARCHIVE_KIND`, and the member name is the field the file case does not have; the
+cache rule reads through `source_fetch.py`, so it states no archive rule of its own. Each remaining piece still needs
+its own owner: the pending row in `src/input_shapes.py` names Piece 13B.4. The member declaration is an operator
+argument held by the CLI, not by a rule owner, so it lands with the CLI argument rule that Piece 13B.4 writes.
 - **13B.4** — the pins: both checks run on the decompressed bytes through the door, no producer bypasses them, and
   the archive path adds a producer and no check. The member rule's owner, and the refusal it prints for a bundle with
   no declaration, land with this piece.

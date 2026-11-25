@@ -56,6 +56,11 @@ applied while the bytes expand, so a bundle that expands past the cap is refused
 is built. The producer adds no check and no refusal wording: a shape it does not accept is
 handed to the door unchanged, and the parse answers it with the line the shape table holds.
 
+Piece 13B.3 adds what the producer states for an accepted read: `ARCHIVE_KIND` as the source
+kind, and the member name it read from the shape, as `SourceOrigin.member`. The producer states
+no naming rule and no `-` rule; the record reads both through the origin, and the record module
+states the value for a member the shape does not name.
+
 F5.3 records the size and the SHA-256 hex of the bytes the door parsed, so the
 provenance record names the bytes it checked, not whatever file stands at the origin
 path now. The door is the only place that can know which bytes were parsed.
@@ -111,7 +116,7 @@ import tarfile
 import xml.etree.ElementTree as ET
 import xml.parsers.expat as expat
 import zlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 # Refuse an input larger than this before reading it (F3.8).
@@ -135,6 +140,21 @@ ESCAPE_SHAPES = frozenset("\t\r\n")
 GZIP_MAGIC = b"\x1f\x8b"
 TAR_MAGIC = b"ustar"
 TAR_MAGIC_AT = 257
+
+# The gzip header, as the gzip reader reads it: the fixed part is ten bytes, and the flags byte names the optional
+# fields that follow it, which appear in the order the format states them, so the name is read after any extra field.
+# The flag values are the ones `zlib` reads, not the ones RFC 1952 states: the reader names 4 for the extra field
+# and 8 for the name, where RFC 1952 names 2 and 4. The producer reads the shape with the reader, so it states the
+# values the reader uses.
+GZIP_HEADER_LEN = 10
+GZIP_FLAGS_AT = 3
+GZIP_EXTRA_FIELD_FLAG = 4
+GZIP_NAME_FIELD_FLAG = 8
+
+# The kind an accepted archive read names in the provenance record (`docs/INPUT_SHAPES.md` §2 rule 5), as the api
+# producer states `SOURCE_KIND` in `source_fetch.py` and the state producer states `STATE_KIND` in `state_input.py`.
+# A read that is not an accepted shape keeps the kind its producer states, because no member was read for it.
+ARCHIVE_KIND = "archive"
 
 
 def control_chars(text: str) -> list[str]:
@@ -180,7 +200,8 @@ class SourceOrigin:
     """Where the bytes a producer handed came from, as a report states it.
 
     ``kind`` is ``file`` for the file producer. F5.2 adds ``api`` and F5.6 adds
-    ``state``.
+    ``state``. Piece 13B.3 adds ``archive``, the kind the archive producer states for a read
+    of an accepted shape, through `ARCHIVE_KIND`.
 
     ``name`` is the value a report prints. For a file it is the file name with no
     directory, so a report line does not depend on the path.
@@ -188,11 +209,17 @@ class SourceOrigin:
     ``path`` is the file a reader can reopen, and is None for a producer that hands
     bytes with no file behind it. A report must still name a source a reader can check,
     so a network producer caches what it fetched and the cache file becomes the path.
+
+    ``member`` is the member an archive read took, read from the shape by the producer that
+    expanded it. It is None when the origin names no member, which is every read that is not
+    an accepted archive read, so the origin states no value for an absent member and the record
+    module states the one value a record writes for a field that does not apply.
     """
 
     kind: str
     name: str
     path: Path | None = None
+    member: str | None = None
 
     @classmethod
     def for_path(cls, path: Path) -> "SourceOrigin":
@@ -457,8 +484,33 @@ def parse_bytes(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAUL
     return _parse_with_lines(data, origin)
 
 
-def _single_tar_member(data: bytes) -> bytes | None:
-    """The content of the only member of a tar archive, or None when the archive holds no single member.
+def _gzip_member_name(data: bytes) -> str | None:
+    """The member name a gzip header states, or None when the header states none.
+
+    The flags byte names the optional fields, and the name is present only when the flags state it. The extra
+    field comes before it, so the name is read after that field is skipped. Each field ends at a NUL. A header
+    that ends before a field its flags state is not a readable stream, so this answers the same None the producer
+    answers for a shape it does not accept.
+    """
+    if len(data) <= GZIP_FLAGS_AT:
+        return None
+    flags = data[GZIP_FLAGS_AT]
+    if not flags & GZIP_NAME_FIELD_FLAG:
+        return None
+    position = GZIP_HEADER_LEN
+    if flags & GZIP_EXTRA_FIELD_FLAG:
+        length = int.from_bytes(data[position : position + 2], "little")
+        position += 2 + length
+    end = data.find(b"\x00", position)
+    if end < 0:
+        return None
+    # The name is bytes, so it is read as text the way the record prints it. A name that is not valid UTF-8 still
+    # reads, because the record names the bytes the stream stated rather than a name it built.
+    return data[position:end].decode("utf-8", "surrogateescape")
+
+
+def _single_tar_member(data: bytes) -> tuple[str | None, bytes] | None:
+    """The member a tar archive holds, as its name and its content, or None when the archive holds no single member.
 
     `data` is already expanded, so this reads the archive structure and not a compressed stream: the producer
     expands once. A stream the tar reader cannot read, or one that holds more than one member, is not an accepted
@@ -470,13 +522,18 @@ def _single_tar_member(data: bytes) -> bytes | None:
             if len(members) != 1:
                 return None
             handle = archive.extractfile(members[0])
-            return None if handle is None else handle.read()
+            content = None if handle is None else handle.read()
+            if content is None:
+                return None
+            # A member that names nothing answers None for its name, so the record writes the value its own rule
+            # states for a field that does not apply.
+            return (members[0].name or None, content)
     except tarfile.TarError:
         return None
 
 
-def _expand_one_member(data: bytes, max_input_bytes: int) -> bytes | None:
-    """Expand one accepted gzip member, or None when the bytes are not an accepted shape.
+def _expand_one_member(data: bytes, max_input_bytes: int) -> tuple[str | None, bytes] | None:
+    """The member an accepted gzip shape holds, as its name and its content, or None when the bytes are not one.
 
     The read stops at `max_input_bytes + 1`, which is the cap `read_input` already states, applied while the bytes
     expand. This states no size rule of its own: `check_bytes` stays the one definition of the size check, and the
@@ -486,9 +543,13 @@ def _expand_one_member(data: bytes, max_input_bytes: int) -> bytes | None:
     A stream with more than one member is not an accepted shape. The refusal the member rule prints for it has no
     owner yet (`docs/INPUT_SHAPES.md` §2 rule 4, Piece 13B.4), so this function states no refusal: it answers None,
     the producer hands the bytes to the door unchanged, and the parse answers them.
+
+    The name is the member fact the record states: the gzip header's name field, or the name the single tar member
+    states. A stream that states no name answers None for it, so the answer is not a second name rule.
     """
     if not data.startswith(GZIP_MAGIC):
         return None
+    name = _gzip_member_name(data)
     reader = zlib.decompressobj(16 | zlib.MAX_WBITS)
     try:
         expanded = reader.decompress(data, max_input_bytes + 1)
@@ -498,12 +559,12 @@ def _expand_one_member(data: bytes, max_input_bytes: int) -> bytes | None:
         return None
     if len(expanded) > max_input_bytes:
         # The cap stopped the expansion. These are the bytes the door checks, so the size refusal is the answer.
-        return expanded
+        return (name, expanded)
     if not reader.eof or reader.unused_data:
         return None
     if expanded[TAR_MAGIC_AT : TAR_MAGIC_AT + len(TAR_MAGIC)] == TAR_MAGIC:
         return _single_tar_member(expanded)
-    return expanded
+    return (name, expanded)
 
 
 def parse_archive(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:
@@ -514,11 +575,18 @@ def parse_archive(data: bytes, origin: SourceOrigin, max_input_bytes: int = DEFA
     are the expanded bytes. Bytes that are not an accepted shape are handed to the door unchanged, so the answer a
     producer gets for them is the answer the door already gives.
 
+    For an accepted shape the origin gains the kind the archive read names and the member it took, and keeps the
+    name and the path the producer was handed, so a record built from this source names bytes a reader can reopen.
+    The producer states no value for a member it did not read, because the record module states that value.
+
     Raises UnsafeInputError for a size or DTD refusal, and
     xml.etree.ElementTree.ParseError for malformed XML.
     """
     member = _expand_one_member(data, max_input_bytes)
-    return parse_bytes(data if member is None else member, origin, max_input_bytes)
+    if member is None:
+        return parse_bytes(data, origin, max_input_bytes)
+    name, content = member
+    return parse_bytes(content, replace(origin, kind=ARCHIVE_KIND, member=name), max_input_bytes)
 
 
 def parse_xml(path, max_input_bytes: int = DEFAULT_MAX_INPUT_BYTES) -> ParsedSource:

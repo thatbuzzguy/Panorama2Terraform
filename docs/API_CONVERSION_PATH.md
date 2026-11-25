@@ -215,8 +215,9 @@ Pinned by `tests/test_api_path.py`: `test_each_response_keeps_its_own_line_map`,
 the pins that read `src/api_requests.py` (the import list, the names the module must not define, and the
 string constants the join must not state) pass unchanged.
 
-**2.5 The record holds one record per request the run read.** The eight fields and the fixed order
-are unchanged (`docs/ARCHITECTURE.md` §3.3). For each request the run read, the `scope` field names the path
+**2.5 The record holds one record per request the run read.** The nine fields and the fixed order
+are unchanged (`docs/ARCHITECTURE.md` §3.3), and an api record states `-` for the `member` field, because a request
+reads no member. For each request the run read, the `scope` field names the path
 that request declared, which is the fact the door records, and the `request` field names the key-free identity
 of that request, which is the shape the cache entry is hashed from; `cache_entry` names the entry that identity
 names. The record file holds the records in the order the run read them, which `provenance.py` rule 6 states

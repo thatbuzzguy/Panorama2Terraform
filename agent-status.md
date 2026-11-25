@@ -1,65 +1,87 @@
 # Agent Status
 
-## Current position (main, Piece 13B.2, 2026-11-24)
+## Current position (main, Piece 13B.3, 2026-11-24)
 
-Piece 13B.2 is complete on main, 2026-11-24, and is not pushed. It lands the archive producer,
-`src/xml_input.py::parse_archive`, behind the F5.1 door, so the size cap is applied while the bytes expand and a
-bundle that expands past the cap is refused before a tree is built. The producer adds a producer and no check:
-`check_bytes` stays the one definition of the two checks, and the door runs them on the bytes the producer hands it,
-which for an accepted shape are the expanded bytes. The producer states no size rule, no DTD rule, no reader and no
-refusal wording of its own, so bytes that are not an accepted shape reach the door unchanged and the parse answers
-them with the line the table already holds for the magic-bytes row. `parse_xml` hands the bytes it read to the
-producer, so both entry points accept the accepted shape under any name, and the accepted rows can name
-`every entry point`.
+Piece 13B.3 is complete on main, 2026-11-24, and is not pushed. It lands decision 5 of `docs/INPUT_SHAPES.md` §2: for
+an archive read the record names the decompressed bytes, `SourceOrigin.kind` names the archive, and the member name
+enters the record as a field the file case does not have. One decision is stated once, in `src/provenance.py` rule 1,
+which is the only place that states the field order: the nine fields, with `member` after `name`.
 
-The producer reads the shape from the bytes through its own constants, `GZIP_MAGIC`, `TAR_MAGIC` and `TAR_MAGIC_AT`,
-and stops the expansion at `max_input_bytes + 1`, the count `read_input` already states. It expands exactly one
-member: a single-member gzip, and a gzip stream that holds a tar archive with exactly one member. A stream with more
-than one member is not an accepted shape, because `docs/INPUT_SHAPES.md` §2 rule 4 has no owner yet, so the producer
-answers nothing for it and this piece pins no member-selection answer and no bundle refusal. The cache rule for an
-archive entry and the record field the member name enters are Piece 13B.3; the member-selection argument and the
-refusal it prints are Piece 13B.4.
+The byte facts stay the door's facts. `check_bytes` is unchanged and the door runs it on the bytes the producer hands
+it, which for an accepted shape are the expanded bytes, so no second size definition and no second hash rule appear.
+The record reads the kind and the member through `SourceOrigin` and states no naming rule, builds no path, and states
+no second F5.3 rule; the `-` rule it already states is the only rule for a field that does not apply, so a file
+record, an api record and a state record state `-` for the member field, and an accepted archive read whose stream
+states no name states `-` too.
+
+The archive kind is `xml_input.ARCHIVE_KIND`, stated by the archive producer as `SOURCE_KIND` and `STATE_KIND` are
+stated by their producers, and the member name is read from the shape by the producer, through the gzip header name
+field and the name a single tar member states. `SourceOrigin` gained `member` with an absent default, so the origin is
+one definition. A shape the producer does not accept keeps the kind its producer states, and `origin_phrase` names the
+path or the name and never the kind, so the refusal wording did not move.
+
+The cache rule is read through the owner that states it, `source_fetch.py` (`docs/ARCHITECTURE.md` §3.3), and is not
+restated: an archive record comes through the file producer, so it states `-` for the cache field, `cache_reference`
+answers None, and `prunable_entries` prunes nothing for it. The condition that differs is recorded as a measurement,
+in `docs/INPUT_SHAPES.md` §1 fact 6: `source_fetch.fetch()` runs the checks through `parse_bytes` and never through
+the archive producer, so no archive read reaches a cache entry today, and the entry it would write holds the bytes as
+they arrived, which no record names.
 
 What moved:
 
-- The accepted archive row states two shapes, so it became two held rows, one per shape, each with the literal stream
-  that shows it, because the pins read a row through one content. The decompression row is added as a held refusal
-  row measured through the producer, and its line carries the origin and the limit with no byte count, because the
-  pins cannot read an expansion as a content size. The two pending rows, Piece 13B.3 and Piece 13B.4, keep the bytes
-  they showed, so the pin that reads a pending row through a held row still holds.
-- The pins move in the same commit. Held rows that state a line move 11 → 12, held refusal rows 10 → 11, held
-  accepted rows 5 → 7, and pending rows 3 → 2, because the accepted row split and the decompression row was added.
-  Four pins are added: `tests/test_input_shapes.py::test_the_decompression_row_is_measured_against_the_expansion_and_not_the_compressed_size`,
-  and in `tests/test_safe_input.py`
-  `::test_the_archive_producer_runs_the_checks_on_the_bytes_it_expands`,
-  `::test_the_cap_stops_the_expansion_before_a_tree_is_built`, and
-  `::test_the_archive_producer_opens_no_file`. The pins measure a compressed row against `EXPANSION_LIMIT` (120),
-  which sits above that row's content (98 bytes) and below what the content expands to (143 bytes), so the refusal
-  can only come from the expansion; every other size row is measured against `MEASURE_LIMIT` (10). The pins read the
-  shape through `xml_input.GZIP_MAGIC`, so they hold no shape rule and no content of their own.
-- No fixture is added, so no fixture-count pin moves: the printed fixture set stays 72 `*.xml` files, 69 accepted
-  and 3 skipped. No module and no material set is added, so the index pin does not move; the producer is a function
-  in `src/xml_input.py`, and the documents name it in the §1 row and in §3.1.
+- The record row in `src/input_shapes.py` moved from `pending` to `held`, measured through `provenance.record_for`,
+  so `provenance` is added to `OWNERS` in `tests/test_input_shapes.py` and the pins call the build rule through the
+  row's own `measured_through`. The row's content is the smallest stream that shows both facts the record reads: the
+  flags byte names the header name field, so the stream states a member, and the member is a stored block that holds
+  the accepted row's content. Its entry point is `every entry point`, because an entry point accepts those bytes
+  through the producer. The row that names Piece 13B.4 stays pending.
+- The shape row counts: held rows that state a line stay 12, held refusal rows stay 11, held accepted rows move
+  7 → 8, and pending rows move 2 → 1, so the pending set is `{"Piece 13B.4"}`.
+- Three pins are added: `tests/test_input_shapes.py::test_the_record_row_is_measured_through_the_record_build_rule`,
+  and in `tests/test_provenance.py`
+  `::test_an_archive_record_names_the_archive_the_member_and_the_decompressed_bytes` (group 1, the record shape) and
+  `::test_an_archive_record_references_no_cache_entry` (group 4, the pruning rule). The record pins read the shape
+  through `input_shapes.SHAPE_TABLE` as data, so no test module holds archive bytes of its own, and the byte facts are
+  read against the content the accepted row shows.
+- The pins that read the shape and the counts move in the same commit. In `tests/test_provenance.py`, group 1 holds
+  the record shape: `::test_the_record_field_names_are_the_printed_keys` states the field count 8 → 9, and
+  `::test_an_archive_record_names_the_archive_the_member_and_the_decompressed_bytes` reads the archive record back as
+  data through `provenance.parse_record` and holds that it prints one line for each field. The group 7 pin
+  `::test_an_update_run_names_only_the_sources_the_door_read` no longer states the field count, because group 1 holds
+  the rule that states it; it keeps the fact that the run gains no field for a record it read as data.
+  `::test_the_prune_reads_the_record_file_and_not_the_records_the_run_built` builds the record with the member field,
+  and the two docstrings that name the field count, the module group list and the group 2 docstring, read nine fields. In `tests/test_input_shapes.py`:
+  `::test_the_table_is_data_with_one_row_shape` states 7 → 8 accepted rows and 2 → 1 pending row,
+  `::test_the_pending_rows_name_pieces_and_no_taken_decision` states the one-piece pending set, and
+  `::test_the_shape_is_decided_from_the_bytes_and_not_from_a_file_name` reads the three held rows whose content shows a
+  compressed stream through the table instead of naming two rows. In `tests/test_safe_input.py`:
+  `::test_file_producer_runs_the_checks_through_the_boundary` reads the origin kind through `xml_input.ARCHIVE_KIND`
+  for the accepted single-member stream and keeps `file` for the two-member stream the producer does not accept.
+- No committed golden holds a record, so no golden moved for the new field; the pins build the record they read. No
+  fixture is added, so no fixture-count pin moves: the printed fixture set stays 72 `*.xml` files, 69 accepted and 3
+  skipped. No module and no test file is added, so the index pin and the `docs/LICENSING.md` counts did not move.
 
 Gate, measured 2026-11-24 single-threaded on the tree that holds this work: `ruff check .` clean at `py310`,
 `ruff format --check .` clean on the 112 files it reads, `python3 tools/check_documents.py` reports no finding in
-18.45 s, and `python3 -m pytest` in one process, with no parallel plugin, exits 0 with 1,841 passed and the same 4
-`tflint` skips, so 1,845 pins in 55 test modules, in 341.49 s. That is the Piece 13B.1 baseline at `752f756` —
-1,835 passed, 4 skips, 1,839 pins, 55 modules — plus the four new pins and the two the row sets gained by the split
-and the added row. `tflint` is absent, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`;
-`terraform` (1.16.2 on this machine) is present, so the provider-schema pins ran. No `src/` rule changed outside the
-producer, so the `docs/LICENSING.md` counts did not move.
+16.40 s, and `python3 -m pytest` in one process, with no parallel plugin, exits 0 with 1,844 passed and the same 4
+`tflint` skips, so 1,848 pins in 55 test modules, in 548.39 s. That is the Piece 13B.2 baseline at `920ce60` — 1,841
+passed, 4 skips, 1,845 pins, 55 modules — plus the three pins this piece added. The two timed checks are read as
+ranges on the same tree, because the run time moves between runs on this machine: `check_documents` answered 10.83 s
+and 16.40 s, and pytest answered 548.39 s and 353.27 s, so the range includes the 341.49 s the baseline stated. `tflint` is absent, so the 4 skips are the `tflint` pins in `tests/test_sanity_gate.py`;
+`terraform` (1.16.2 on this machine) is present, so the provider-schema pins ran. The run before it answered 1,557
+passed, 4 skipped and 287 errors, because `tests/conftest.py::provider_schemas` asserts on a failed `terraform init`
+rather than skipping, so one failed init answers as an error for every pin that reads that session fixture; the same
+tree answered the run above.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §1, §1.1 and §3.1, `src/input_shapes.py`,
-`src/xml_input.py`, `tests/conftest.py`, `tests/test_input_shapes.py`, `tests/test_safe_input.py`,
-`tests/test_layout.py`, `tests/test_write_path.py`, `tests/test_reference_edges.py`, `tests/test_variables.py`,
-`tools/check_documents.py`, `pyproject.toml`.
+`commit.md`, `README.md`, `docs/INPUT_SHAPES.md`, `docs/ARCHITECTURE.md` §1, §1.1, §3.1 and §3.3,
+`docs/USAGE_GUIDE.md`, `docs/API_CONVERSION_PATH.md` §2.5, `src/input_shapes.py`, `src/provenance.py`,
+`src/xml_input.py`, `src/source_fetch.py`, `tests/conftest.py`, `tests/test_input_shapes.py`,
+`tests/test_provenance.py`, `tests/test_safe_input.py`, `tests/test_write_path.py`, `tools/check_documents.py`,
+`pyproject.toml`.
 
-The next piece is Piece 13B.3, the provenance facts for an archive read: the origin kind, the member name as a field
-the file case does not have, and how the cache rule reads for an archive entry. Piece 13B.4 writes the member rule's
-owner, the refusal it prints for a bundle with no declaration, and the end-to-end pins for the archive path. Phase
-13C needs no decision.
+The next piece is Piece 13B.4: the member rule's owner, the refusal it prints for a bundle with no declaration, and
+the end-to-end pins for the archive path. Phase 13C needs no decision.
 
 ## Rules to keep when writing documents
 

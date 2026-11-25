@@ -13,14 +13,17 @@ restates no row (`docs/INPUT_SHAPES.md` §3). These pins measure the table in fo
   refusal;
 - every accepted row answers no refusal when the shared read rule reads its content, and every pending row reads no
   owner today, so the table prints nothing for it and each pending row names the piece that will state its line;
+- the record row is measured through the record build rule its owner names, and the record it builds is read back
+  through `provenance.parse_record`, because a row is held only when a pin can call its owner;
 - the archive rows are read through the producer the table names, so the pins measure the shape from the bytes, and
   the decompression row is measured against a limit that is above its content and below what its content expands to,
   which is the only way the refusal it states can come from the expansion;
 
 The pins decide each shape from the row's bytes and not from a file name, and no row names a file name or a fixture.
 The pins call `xml_input.check_bytes`, `xml_input.read_input`, `xml_input.parse_bytes`, `xml_input.parse_archive`,
-`state_input.parse_state` and `split_device_groups.console_lines` through each row's own `measured_through`, so this
-module holds no second size check, no second DTD rule, no second reader, and no second console line.
+`state_input.parse_state`, `split_device_groups.console_lines` and `provenance.record_for` through each row's own
+`measured_through`, so this module holds no second size check, no second DTD rule, no second reader, no second
+console line and no second record rule.
 """
 
 import ast
@@ -34,6 +37,7 @@ import container_coverage
 import input_shapes
 import naming
 import panorama_to_terraform
+import provenance
 import source_fetch
 import split_device_groups
 import state_input
@@ -42,7 +46,12 @@ from conftest import FIXTURES_DIR, SRC_DIR, input_refusal, run_script
 
 # The owners the rows name. A row names its owner as a function, the pins resolve the name and call it, so the pins
 # hold no reader of their own.
-OWNERS = {"xml_input": xml_input, "state_input": state_input, "split_device_groups": split_device_groups}
+OWNERS = {
+    "xml_input": xml_input,
+    "state_input": state_input,
+    "split_device_groups": split_device_groups,
+    "provenance": provenance,
+}
 
 # The limit the size pins measure against, which is under every row's content that is not a compressed stream, so
 # the size half of a refusal reads as a plain byte count and the pins can compare the numbers a line prints. A row
@@ -129,6 +138,10 @@ def _answer(row: dict, path: Path) -> Exception | None:
             # The producer and the door take the limit the pins measure the row against, because the row states a
             # size line. Every other owner is called with the content and the origin alone.
             reader(row["content"], _origin(path), _limit(row))
+        elif reader is provenance.record_for:
+            # The record build rule takes a source, not bytes, so the pins hand it the source the producer returned
+            # for the row's content and the request the run read, which is None for the producer this row shows.
+            reader(xml_input.parse_archive(row["content"], _origin(path)), None)
         else:
             reader(row["content"], _origin(path))
     except Exception as error:  # The two refusal kinds the door states, and no other kind.
@@ -196,8 +209,8 @@ def test_the_table_is_data_with_one_row_shape():
     assert len(held_lines) == 12, "the pins measure every held row that states a line"
     assert len(_refusal_rows()) == 11, "the pins measure every held refusal row through its owner"
     assert len(_console_rows()) == 1, "the pins measure the held console line row through its owner"
-    assert len(_rows(input_shapes.STATUS_HELD, states_line=False)) == 7, "the pins measure every accepted row"
-    assert len(_rows(input_shapes.STATUS_PENDING)) == 2, "the pins read the pending rows as pending"
+    assert len(_rows(input_shapes.STATUS_HELD, states_line=False)) == 8, "the pins measure every accepted row"
+    assert len(_rows(input_shapes.STATUS_PENDING)) == 1, "the pins read the pending rows as pending"
 
 
 def test_the_pins_define_no_row_shape_and_no_row_of_their_own():
@@ -255,15 +268,17 @@ def test_no_row_names_a_file_name_or_a_fixture():
 def test_the_shape_is_decided_from_the_bytes_and_not_from_a_file_name(tmp_path):
     """Criterion 4, measured: the same bytes answer the same way under three different names, so a name decides
     nothing. The magic-bytes row is refused under a name that says XML, and the accepted XML row is accepted under a
-    name that says archive, both read through the shared read rule (`tests/conftest.py::input_refusal`). The two
-    accepted archive rows answer the same way under the same three names, so the shape is read from the bytes and not
-    from the extension."""
+    name that says archive, both read through the shared read rule (`tests/conftest.py::input_refusal`). The accepted
+    archive rows answer the same way under the same three names, so the shape is read from the bytes and not from the
+    extension. The record row is one of them, because its content is a stream an entry point accepts."""
     refused_row = _row("bytes the parser cannot read as one XML document, the magic bytes of a compressed member")
     accepted_row = _row("XML bytes, no DTD, within the input limit")
     archive_rows = [
-        _row("a gzip stream that holds exactly one member, read through the archive producer"),
-        _row("a gzip stream that holds a tar archive with exactly one member, read through the archive producer"),
+        row
+        for row in _rows(input_shapes.STATUS_HELD, states_line=False)
+        if row["content"][: len(xml_input.GZIP_MAGIC)] == xml_input.GZIP_MAGIC
     ]
+    assert len(archive_rows) == 3, (archive_rows, "every accepted archive row shows a compressed stream")
     for name in ("shape.bin", "shape.xml", "shape.gz"):
         refused = tmp_path / name
         refused.write_bytes(refused_row["content"])
@@ -413,13 +428,51 @@ def test_a_pending_row_states_no_line_and_names_the_piece_that_will_state_its_li
 def test_the_pending_rows_name_pieces_and_no_taken_decision():
     """The status rule read as a set (`docs/INPUT_SHAPES.md` §3 rule 3): the pending rows name the pieces that will
     state their lines, so a row that names a §2 decision would name a decision this piece took. Both §2 decisions are
-    taken, so the pending set is the two pieces that still need an owner. The splitter row is held, because the run
+    taken, so the pending set is the one piece that still needs an owner. The splitter row is held, because the run
     prints the line Piece 13A.2 wrote for it, and no pending row holds a line. The archive rows are held, because the
-    producer Piece 13B.2 wrote measures them."""
+    producer Piece 13B.2 wrote measures them, and the record row is held, because the record build rule Piece 13B.3
+    landed measures it."""
     pending = {row["pending_on"] for row in input_shapes.SHAPE_TABLE if row["status"] == input_shapes.STATUS_PENDING}
-    assert pending == {"Piece 13B.3", "Piece 13B.4"}, pending
+    assert pending == {"Piece 13B.4"}, pending
     for row in input_shapes.SHAPE_TABLE:
         assert not (row["status"] == input_shapes.STATUS_PENDING and row["printed_line"]), (row["shape"], "both")
+
+
+def test_the_record_row_is_measured_through_the_record_build_rule(tmp_path):
+    """The record row, read through the owner the row names and back through the record module's reader, which is
+    what makes a row held: a row is measured only when a pin can call its owner (`docs/INPUT_SHAPES.md` §3 rule 3).
+    The pins hold no bytes of their own: the shape is the row's content, and the record's byte facts are read against
+    the content the accepted row shows, so the pins hold that the record names the bytes the door checked and not the
+    stream the row holds. The kind and the member are read through the origin, which is the one definition the record
+    reads, and the record reads back as itself through `parse_record`, so the row's owner is a build rule the pins
+    call, not a wording the table states.
+    """
+    row = _row("the decompressed bytes an archive read names in the provenance record")
+    path = tmp_path / "input"
+    origin = _origin(path)
+    source = xml_input.parse_archive(row["content"], origin)
+    record = _owner(row)(source, None)
+    assert record == provenance.parse_record(provenance.render(record)), "the record row reads back as itself"
+    assert record.kind == xml_input.ARCHIVE_KIND, "the record names the archive through the kind the producer states"
+    assert record.member == source.origin.member, "the record names the member through the origin"
+    assert record.member != provenance.ABSENT, "the stream states a member name"
+    assert record.name == origin.name and record.path == str(origin.path), "the producer changed no name rule"
+    assert record.size == len(_row("XML bytes, no DTD, within the input limit")["content"]), (
+        "the size names the bytes the door checked, not the compressed stream"
+    )
+    assert record.sha256 == source.sha256, "the hash names the same bytes the door checked"
+    assert provenance.cache_reference(record) is None, "the file producer reads no cache, so the record names none"
+
+    # The member is the name each stream states, read by the producer, so the record module states no value for it:
+    # the two accepted archive rows answer with two different names, and a stream that states no name answers the `-`
+    # the record module states for a field that does not apply.
+    gzip_row = _row("a gzip stream that holds exactly one member, read through the archive producer")
+    tar_row = _row("a gzip stream that holds a tar archive with exactly one member, read through the archive producer")
+    names = {}
+    for shape_row in (gzip_row, tar_row):
+        shape_source = _owner(shape_row)(shape_row["content"], _origin(tmp_path / "shape"))
+        names[shape_row["shape"]] = provenance.record_for(shape_source, None).member
+    assert names[gzip_row["shape"]] != names[tar_row["shape"]], (names, "the name comes from each stream")
 
 
 @pytest.mark.parametrize("shape", ENTRY_POINT_ROWS)

@@ -215,8 +215,8 @@ a source. The other files are the unit set, and the run writes one directory per
 ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §14):
 
 - `SOURCE.txt` - what the run read, as `field: value` data, one record per source read: the
-  source kind, the name, the path, the scope, the request identity, the cache entry, the size,
-  and the SHA-256 hex of the bytes the input door parsed ([`src/provenance.py`](src/provenance.py))
+  source kind, the name, the member an archive read took, the path, the scope, the request identity, the cache entry,
+  the size, and the SHA-256 hex of the bytes the input door parsed ([`src/provenance.py`](src/provenance.py))
 - `CODEBASE_MANIFEST.json` - one row per unit (one declared scope), as data: the five scope facts,
   the directory name, the entry count, and the names the unit references from outside itself
   ([`src/unit_manifest.py`](src/unit_manifest.py)). Every run writes it when it has content
