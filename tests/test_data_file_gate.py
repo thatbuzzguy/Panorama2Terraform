@@ -48,8 +48,10 @@ import site_data
 import unit_manifest
 import write_path
 from conftest import (
+    CODEBASE_FIXTURE,
     FIXTURES_DIR,
     RULE_TYPES,
+    RUN_FIXTURE,
     SAMPLE_CONFIG,
     corpus_fixtures,
     data_file_set,
@@ -799,7 +801,7 @@ def test_the_data_rule_reads_the_merged_record_as_the_codebase_set(tmp_path):
     through `codebase_state.merge_rows` and `write_path`, the same tree reports no finding, including the printed
     form inside the 10 directories the second run did not write, and the count names the same 8 data files.
     """
-    codebase, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    codebase, partial, run = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
     findings = sanity_checks.check_data_files(partial)
     assert len(findings) == 37, [f.render() for f in findings]
     root = [f for f in findings if not Path(f.file).parent.name]

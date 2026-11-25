@@ -291,15 +291,19 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   are gitignored and present, and `terraform_example/` states 2.0.14 and `>= 1.14`. A pin sweep reports 49 files or
   44 depending on whether ignored files are counted, while Piece 12A.2 counts only the tracked goldens. Clear the
   tree and state which set a pin sweep reads.
-- **The committed pair is stated once as constants, but five pins name it inline.** Measured 2026-11-23 during the
-  Piece 11C.1 acceptance review: `tests/conftest.py` owns the pair as `CODEBASE_FIXTURE` and `RUN_FIXTURE`, and the
-  five modules that read the merged rows use them, while pins in three other modules pass the two names inline.
-  `docs/MULTI_RUN_CODEBASE.md` §5 rule 1 states the pattern, not the names, so nothing is broken; this is the kind of
-  second statement §1 rule 6 avoids, and the pins would read the constants instead. Owners: `tests/conftest.py` and
-  `docs/MULTI_RUN_CODEBASE.md` §5 rule 1. Measured pins: `tests/test_data_file_gate.py:802`,
-  `tests/test_round_trip.py:1031`, `tests/test_sanity_gate.py:1328`, `tests/test_sanity_gate.py:1352`,
-  `tests/test_sanity_gate.py:1411`. Piece 11C.3 changed `tests/test_write_path.py` to read the pair through the two
-  constants, so that module names no pair of its own; the pins listed above still pass the names inline.
+- **The pair's two names are still stated inside the three modules, for facts of their own.** Measured 2026-11-25,
+  after the piece that closed the inline pins: `tests/conftest.py` owns the pair as `CODEBASE_FIXTURE` and
+  `RUN_FIXTURE`, and the five pins that read the merged rows now read the pair through them, so the item the piece
+  closed is no longer open. Three modules still state one of the two names for a fact of their own:
+  `tests/test_data_file_gate.py` holds `KITCHEN` and runs `address_objects.xml` as a single run in
+  `test_the_data_rule_reads_a_merged_record_through_the_same_reader`; `tests/test_round_trip.py` holds
+  `KIND_FIXTURE` and `PROPERTY_SCAN_FIXTURE` for the shape fact and the property-scan fact; `tests/test_sanity_gate.py`
+  runs `kitchen_sink.xml` as a single run in three pins and holds the pair as data with its unit counts in
+  `test_for_a_single_run_the_run_set_and_the_record_set_are_the_same_set`. Each of those names measures one run, not
+  the pattern the committed pair states, so it is not the second statement §1 rule 6 avoids, and the piece left them
+  alone. No pin reads a test module for a fixture name, so nothing holds this: the pins in these three modules that
+  read a source read a `src/` module source, so a change inside a test module cannot trip them. Owners:
+  `tests/conftest.py` and `docs/MULTI_RUN_CODEBASE.md` §5 rule 1.
 
 - **The operator file has no owner constant, so the pin states its name.** `docs/CODEBASE_ASSEMBLY.md` §11 states the
   rule in prose and `src/site_data.py` owns only the printed form's name, so a pin that places an operator file in the

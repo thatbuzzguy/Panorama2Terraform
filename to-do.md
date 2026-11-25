@@ -52,6 +52,13 @@ names the decision it needs.
 - **Piece, the writing rules** — complete on main, 2026-11-25, and committed, so this piece's record lives in the
   git history. The writing rules moved from `agent-status.md` to their owner document `docs/WRITING_RULES.md`,
   named by `docs/README.md` and by the root index, and `agent-status.md` keeps the status and the links.
+- **Piece, the five pins read the committed pair through the constants** — complete on main, 2026-11-25, and
+  committed, so this piece's record lives in the git history. The five pins that read the merged rows read the pair
+  through `CODEBASE_FIXTURE` and `RUN_FIXTURE`, the constants `tests/conftest.py` owns, and each of the three modules
+  reads the two names from `conftest`. No test module defines a pair of its own, no test module imports another test
+  module, and the rule that `tests/conftest.py` is the one place the path to each set is built did not move. The item
+  is closed, so the record is removed from `backlog.md`, and the names the three modules hold for their own facts are
+  recorded there as the part that stays open.
 - **Piece, the gate and CI rules** — open. Needs one owner document named by `docs/README.md`, holding the
   gate-size decision, the shared test definitions rule, the Python floor rule, the missing-binary skip rule, and the
   one-owner rule for the tool pins, which `agent-status.md` states with no owner document today. The choice of the

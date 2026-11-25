@@ -64,8 +64,10 @@ import panorama_to_terraform
 import sanity_checks
 import unit_manifest
 from conftest import (
+    CODEBASE_FIXTURE,
     FIXTURES_DIR,
     RULE_TYPES,
+    RUN_FIXTURE,
     SAMPLE_CONFIG,
     corpus_fixtures,
     data_file_set,
@@ -1028,7 +1030,7 @@ def test_the_block_side_is_read_inside_the_run_s_unit_set(tmp_path):
     findings, 36 of them for units it read no rows for. The count inside the run's own unit still disagrees,
     because the reader reads the `.tf` files that unit holds, and those are the bytes the first run wrote.
     """
-    _, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    _, partial, run = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
     files = tf_files(partial)
     findings = sanity_checks.check_round_trip(files, run.ledger, partial)
     run_units = {unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(run.ledger)}

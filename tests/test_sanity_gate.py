@@ -85,10 +85,12 @@ import unit_manifest
 import write_path
 import xml_input
 from conftest import (
+    CODEBASE_FIXTURE,
     FIXTURES_DIR,
     GOLDEN_DIR,
     REPO_ROOT,
     RESPONSES_DIR,
+    RUN_FIXTURE,
     SAMPLE_CONFIG,
     SRC_DIR,
     TERRAFORM,
@@ -1325,7 +1327,7 @@ def test_the_block_rules_read_the_whole_codebase_for_a_partial_run(tmp_path):
     directories, 8 data files, 64 blocks. The `placeholders` WARN sits in `shared_a6577c11`, a unit the second run
     read no rows for, so a block rule can report a finding for a unit the run did not write.
     """
-    _, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    _, partial, run = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
     run_units = [unit_manifest.directory_name(facts, naming.sanitize) for facts in unit_manifest.units(run.ledger)]
     assert run_units == ["shared_45ca31c3"], run_units
     files = sanity_checks.read_tf_files(partial)
@@ -1349,7 +1351,7 @@ def test_the_two_command_checks_run_once_per_directory_the_run_wrote(tmp_path, m
     machine that has neither: a SKIPPED result names the directory the check ran on, the way a passing result names
     it in the note.
     """
-    codebase, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    codebase, partial, run = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
     merged = tmp_path / "merged"
     shutil.copytree(partial, merged)
     write_merged_records(codebase, partial, merged)
@@ -1408,11 +1410,11 @@ def test_a_partial_run_exit_code_follows_the_rules_that_read_the_files(tmp_path)
     decides on, is False and the exit code is 0. The fact that the run writes the merged record at the root is
     Piece 11C, so this pin reads the merged record written through its owner.
     """
-    codebase, partial, run = partial_run("kitchen_sink.xml", "address_objects.xml", tmp_path)
+    codebase, partial, run = partial_run(CODEBASE_FIXTURE, RUN_FIXTURE, tmp_path)
     report = sanity_checks.run_checks(partial, ledger=run.ledger)
     assert (report.fail_count, report.warn_count) == (41, 9), report.render()
     assert report.failed, "a FAIL finding from a rule that reads the files decides the exit code"
-    argv = [str(FIXTURES_DIR / "address_objects.xml"), "--output-dir", str(partial)]
+    argv = [str(FIXTURES_DIR / RUN_FIXTURE), "--output-dir", str(partial)]
     assert run_main(panorama_to_terraform, argv) == 1
     assert len(report.findings("data_files")) == 37, report.render()
     assert len(report.findings("rule_blocks")) == 4, report.render()

@@ -1,46 +1,53 @@
 # Agent Status
 
-## Current position (main, the writing-rules piece, 2026-11-25)
+## Current position (main, the five pins read the committed pair through the constants, 2026-11-25)
 
-Piece, the writing rules with an owner document, is complete on main, 2026-11-25, and is not pushed. It is the
-writing-rules half of the process-debt entry "Permanent rules have no owner document" in `backlog.md`, and one
-goal: the writing rules. Piece 13C.1 is committed at `cadd33a`, so its record lives in the git history, and the
-full-run baseline this piece starts from is its measurement: 1,857 passed and the same 4 `tflint` skips.
+Piece, the five pins read the committed pair through the constants, is complete on main, 2026-11-25, and is not
+pushed. It is the process-debt item "The committed pair is stated once as constants, but five pins name it inline"
+in `backlog.md`, and one goal: the five pins read the pair through the constants `tests/conftest.py` owns. Piece
+13C.1 is committed at `cadd33a` and the writing-rules piece at `077cdce`, so their records live in the git history,
+and the full-run baseline this piece starts from is the writing-rules piece's measurement: 1,857 passed and the same
+4 `tflint` skips, so 1,861 pins in 55 test modules. The writing rules are in their owner document
+`docs/WRITING_RULES.md`, so this file keeps the status and the links and states no writing rule of its own.
 
-- The writing rules have an owner document, `docs/WRITING_RULES.md`, named by `docs/README.md`, which owns the rule
-  that each rule lives in one document, and by the root index, `README.md`. The document states that it is the
-  owner and that the other documents link to it.
-- `agent-status.md` keeps the status and the links and states no writing rule of its own. The gate and CI rules and
-  the shape-table and write-path watch list stay open in this file, recorded in `backlog.md` with the document each
-  needs.
-- The writing rules separated cleanly from the gate and CI rules, so no rule was split: a writing rule states what a
-  document may hold, and a gate rule states what a run measures. The writing rule that a wording check lives in
-  `tools/check_documents.py`, which the test set does not read, moved with the writing rules, and the gate document
-  a later piece writes links to it.
-- `docs/README.md` gained the index row and the ownership row for the document, `README.md` gained the link in its
-  Documentation section, `to-do.md` gained the two open pieces, and `backlog.md` records the open rule sets with the
-  document each needs. The choice of the two open names is an open decision that measurement cannot answer.
-
-Nothing in `src/` or in `tests/` changed, so no pin, no fixture, no golden and no `docs/LICENSING.md` count moved.
-The one pin that can move is `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, because a new
-file under `docs/` is a markdown edit that the index rule reads. Gate, measured 2026-11-25 single-threaded on the
-tree that holds this work: `ruff check .` clean at `py310` with the 120-character line length,
-`ruff format --check .` clean on the 113 files it reads, which is the 112 of the Piece 13C.1 baseline plus this
-document, `python3 tools/check_documents.py` reports no finding in 13.26 s, the fast path answered 1 passed in
-0.62 s for `tests/test_layout.py`, and `python3 -m pytest -p no:cacheprovider` in one process, with no parallel
-plugin, exits 0 with 1,857 passed and the same 4 `tflint` skips, so 1,861 pins in 55 test modules, in 526.48 s; an
-earlier run of the same suite on the same tree answered the same counts in 538.64 s. On these runs the terminal
-writer printed no summary line, so the counts were read from the progress characters and confirmed against
-`python3 -m pytest --collect-only -q`, which names 55 test modules and 1,861 pins. Run times on this machine move
-between runs, so each figure here is one measurement.
+- The five pins call `tests/conftest.py::partial_run` with `CODEBASE_FIXTURE` and `RUN_FIXTURE` and state no name of
+  the pair inline. Inside
+  `tests/test_sanity_gate.py::test_a_partial_run_exit_code_follows_the_rules_that_read_the_files` the argv line that
+  builds the entry point's run from the second fixture reads through `RUN_FIXTURE` too, so that pin reads the pair
+  one way.
+- `CODEBASE_FIXTURE` and `RUN_FIXTURE` are in the import set of `tests/test_data_file_gate.py`,
+  `tests/test_round_trip.py` and `tests/test_sanity_gate.py`. No test module defines a pair of its own for the
+  pattern, no test module imports another test module, and the rule that `tests/conftest.py` is the one place the
+  path to each set is built stayed in `tests/conftest.py` and `docs/ARCHITECTURE.md` §1.1. `partial_run` still takes
+  the two names as an argument and states no fixture name of its own.
+- Nothing that reads names can move for this change. No pin in these three modules reads a test module source, so the
+  pins that read a source read `sanity_checks.py`, and `tests/test_layout.py` reads names. The pins that hold the
+  pair as data, the three-run measurement in
+  `tests/test_sanity_gate.py::test_for_a_single_run_the_run_set_and_the_record_set_are_the_same_set`, and the fixture
+  constants the three modules hold for their own facts, are not the pattern the pins read, so they were left alone
+  and recorded in `backlog.md`.
+- Docstring prose: three of the five pins state the fixture names inside their measurement as prose, and the prose
+  agrees with the code after the change, so the prose stays as it is.
+- Gate, measured 2026-11-25 single-threaded on the tree that holds this work: `ruff check .` clean at `py310` with
+  the 120-character line length, `ruff format --check .` clean on the 113 files it reads, which is the same 113 as
+  the baseline, `python3 tools/check_documents.py` reports no finding in 8.91 s, the fast path answered 1 passed in
+  0.56 s for `tests/test_layout.py`, and `python3 -m pytest -p no:cacheprovider` in one process, with no parallel
+  plugin, exits 0 with 1,857 passed and the same 4 `tflint` skips, so 1,861 pins in 55 test modules, in 378.12 s.
+  `tflint` is absent on this machine, so the four skips are the four `tflint` pins in `tests/test_sanity_gate.py`,
+  and `terraform` is present, so the provider-schema pins ran. No count moved, because this piece adds no pin; the
+  pin count was confirmed against `python3 -m pytest --collect-only -q`, which names 55 test modules and 1,861 pins
+  on the tree before the change and on the tree that holds it. Run times on this machine move between runs, so each
+  figure here is one measurement.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/README.md`, `docs/ARCHITECTURE.md` §1.1, `tools/check_documents.py` checks 1, 5 and
-7, `tests/test_layout.py`, `src/input_shapes.py`.
+`commit.md`, `README.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/MULTI_RUN_CODEBASE.md` §5 and §6,
+`pyproject.toml`, `tools/check_documents.py`, `tests/conftest.py`, `tests/test_layout.py`, and the three modules the
+change is in: `tests/test_data_file_gate.py`, `tests/test_round_trip.py`, `tests/test_sanity_gate.py`.
 
 The next piece: no Epic 14 piece can be written, because the decisions in `docs/IMPORT_BINDING.md` §2 are untaken,
 so Piece 14A.1 stays blocked on decision 1. The two open process-debt pieces, the gate and CI document and the watch
-list document, are in `to-do.md` and `backlog.md`.
+list document, are in `to-do.md` and `backlog.md`. No decision was taken by this piece, and no document-review
+finding was opened by it.
 
 ## Rules to keep when writing documents
 
