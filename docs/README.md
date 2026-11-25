@@ -20,6 +20,7 @@ that document instead of restating the rule.
 | [IMPORT_BINDING.md](IMPORT_BINDING.md) | Which block a run binds to the object the live config already has, how that decision is recorded as data, and which facts an id needs. Design record for Epic 14, planning |
 | [ADVANCED-ROUTING-ENGINE-SUPPORT.md](ADVANCED-ROUTING-ENGINE-SUPPORT.md) | Logical routers, and the routing config the converter does not read |
 | [VPN_ROUTING_CONFIG_EXAMPLES.md](VPN_ROUTING_CONFIG_EXAMPLES.md) | The XML shapes the parser reads for VPN and routing |
+| [WRITING_RULES.md](WRITING_RULES.md) | The rules a document follows when it is written. Owner document for the writing rules |
 | [LICENSING.md](LICENSING.md) | Who holds the copyright for each part, and what each grant covers |
 
 ## Who owns each rule
@@ -55,6 +56,7 @@ that document instead of restating the rule.
 | The credential rule, stated once | `CODEBASE_ASSEMBLY.md` §11 is the owner; `ARCHITECTURE.md` §3 links to it and keeps only what the fetch layer enforces, and `README.md`, `docs/USAGE_GUIDE.md` and `docs/MIGRATION_GUIDE.md` link to it |
 | Provenance record, the cache reference, and the prune action it gates | `ARCHITECTURE.md` §3.3, and `provenance.py`; the two file sets the record belongs to are `CODEBASE_ASSEMBLY.md` §14; the path 2 case, one record per request the run read, is `API_CONVERSION_PATH.md` §2.5 and `tests/test_provenance.py` |
 | Repository layout: the directories, the import rule, the flat test rule, and the four test sets | `ARCHITECTURE.md` §1.1, `AGENTS.md` (the tracking set), and the four readme indexes (`README.md`, this file, `../examples/README.md`, `../tools/README.md`) |
+| The writing rules: what a document may state and what a pin can hold | `WRITING_RULES.md` is the owner; `agent-status.md` and the other documents link to it, and `AGENTS.md` owns the rule that completed detail is removed from the tracking markdown |
 | The fixture assembler: its read rule, its merge rule, and the rule that the committed fixture is the record it does not write | `ARCHITECTURE.md` §1.1, `../tools/README.md`, and `tests/test_build_kitchen_sink.py` |
 | The second path: the committed response set, where it lives, and the rule that no test calls a network | `API_CONVERSION_PATH.md` §5, `ARCHITECTURE.md` §1.1 for the set, and `tests/test_api_requests.py`, `tests/test_source_fetch.py`, `tests/test_build_kitchen_sink.py`; the byte agreement between the two paths for content that holds no fact §4 names is `API_CONVERSION_PATH.md` §5 and `tests/test_api_path.py` |
 | The second path: the accepted request shapes, the scope index, and the response-to-request join | `API_CONVERSION_PATH.md` §2, `source_fetch.py` for the shapes, `container_coverage.SCOPE_PATH_ROOTS` for the one scope path definition, and `api_requests.py` for the index and the join |

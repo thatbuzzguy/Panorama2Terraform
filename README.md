@@ -833,6 +833,7 @@ document; the others link to it.
   logical routers
 - [`docs/VPN_ROUTING_CONFIG_EXAMPLES.md`](docs/VPN_ROUTING_CONFIG_EXAMPLES.md) -
   input shapes the parser reads
+- [`docs/WRITING_RULES.md`](docs/WRITING_RULES.md) - the writing rules, stated once in their owner document
 - [`docs/LICENSING.md`](docs/LICENSING.md) - the license rule: the fork source, the two holders, the
   measured split, and the scope of each grant
 

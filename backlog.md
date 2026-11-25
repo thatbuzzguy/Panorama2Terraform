@@ -195,12 +195,24 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   9.1.1 and ruff 0.16.10 and names no Terraform or provider version, so the piece list named a file that holds
   nothing belonging to the piece. Nothing was changed in it. If the tool pins are meant to be recorded there, the
   file needs a Terraform or provider entry and a pin that reads it; otherwise the piece lists should not name it.
-- **Permanent rules have no owner document.** `agent-status.md` holds three rule sets that no owner document
-  states: the writing rules (lines 60 to 78), the gate and CI rules (80 to 102), and the shape-table and write-path
-  watch list (104 to 300). `docs/README.md` owns the rule that each rule lives in one document, so a rule stated
-  only in the status file is both a restatement and a rule that can be lost, because the status file is rewritten
-  between sessions and `AGENTS.md` removes completed detail from the tracking markdown. The writing rules need an
-  owner document, named by `docs/README.md` and the root index, and `agent-status.md` keeps the status and the links.
+- **Permanent rules have no owner document.** The writing rules have an owner document since the piece of
+  2026-11-25: `docs/WRITING_RULES.md`, named by `docs/README.md`, which owns the rule that each rule lives in one
+  document, and by the root index, and `agent-status.md` keeps the status and the links. Two rule sets stay open in
+  `agent-status.md`, which is rewritten between sessions, so a rule stated only there can be lost:
+  - The gate and CI rules need one owner document named by `docs/README.md`. `docs/ARCHITECTURE.md` §1.1 owns the
+    layout rule and states the rule that the full run is the default gate, so the document needs the gate-size
+    decision, the shared test definitions rule, the Python floor rule, the missing-binary skip rule, and the
+    one-owner rule for the tool pins, none of which has an owner document today. The choice of the name is an open
+    decision that measurement cannot answer, recorded here and not guessed.
+  - The shape-table and write-path watch list needs one owner document named by `docs/README.md`, holding each
+    watched rule with the link to the owner document or module that already states it, and no restatement, because
+    each watched rule already names its owner today. The choice of the name is an open decision that measurement
+    cannot answer, recorded here and not guessed.
+  - The writing rules separated cleanly from the gate and CI rules, so no rule was split across two documents for
+    this piece: a writing rule states what a document may hold, and a gate rule states what a run measures. The one
+    sentence that reaches both is the writing rule that a wording check lives in `tools/check_documents.py`, which
+    the test set does not read, because that sentence states why the document review sits outside the gate. It moved
+    with the writing rules, and the gate document needs to link to it.
 - **The document rules are enforced outside the gate.** `AGENTS.md` names the gate as `ruff check .`,
   `ruff format --check .` and `pytest`. `tools/check_documents.py` holds the document-review checks and states that
   the test set does not read it, so the claim rule, the matrix parity, the no-test-count rule and the once-naming

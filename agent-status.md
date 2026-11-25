@@ -1,63 +1,51 @@
 # Agent Status
 
-## Current position (main, Piece 13C.1, 2026-11-25)
+## Current position (main, the writing-rules piece, 2026-11-25)
 
-Piece 13C.1 is complete on main, 2026-11-25, and is not pushed. It is a documents-only piece and the last piece of
-Epic 13, so the epic is complete and its pieces are in the git history; the facts only a live target states stay in
-`backlog.md`. The rules this piece wrote are the operator rule for which export a run needs, and the ownership of it:
+Piece, the writing rules with an owner document, is complete on main, 2026-11-25, and is not pushed. It is the
+writing-rules half of the process-debt entry "Permanent rules have no owner document" in `backlog.md`, and one
+goal: the writing rules. Piece 13C.1 is committed at `cadd33a`, so its record lives in the git history, and the
+full-run baseline this piece starts from is its measurement: 1,857 passed and the same 4 `tflint` skips.
 
-- `docs/USAGE_GUIDE.md` §Which export a run needs is the owner, because it is the document that tells the operator
-  how to run each script. It states that the Panorama-level export is the one a run needs for device groups and that
-  a per-device export is the one a run needs for that device's own config, names the fact that tells them apart, and
-  keeps the pins that read the two shapes as named tests. The shapes are rows, so the section names them, holds no row
-  wording, and links to the table and to `docs/INPUT_SHAPES.md` §1 fact 3.
-- `README.md` §Exporting from Panorama, `docs/DEVICE_GROUP_SPLITTING.md`, `docs/INPUT_SHAPES.md` §1 fact 3 and the two
-  troubleshooting rows link to that section and state no shape wording. `docs/DEVICE_GROUP_SPLITTING.md` keeps only
-  what it owns: the join between a device group and a template, what a split file holds, and the splitter's answer for
-  a device export. `docs/README.md` gained the owner row for the rule.
-- The two facts that only a live target states — which file form the UI download writes, and which member a bundle
-  holds — are named as live facts and not stated as facts.
+- The writing rules have an owner document, `docs/WRITING_RULES.md`, named by `docs/README.md`, which owns the rule
+  that each rule lives in one document, and by the root index, `README.md`. The document states that it is the
+  owner and that the other documents link to it.
+- `agent-status.md` keeps the status and the links and states no writing rule of its own. The gate and CI rules and
+  the shape-table and write-path watch list stay open in this file, recorded in `backlog.md` with the document each
+  needs.
+- The writing rules separated cleanly from the gate and CI rules, so no rule was split: a writing rule states what a
+  document may hold, and a gate rule states what a run measures. The writing rule that a wording check lives in
+  `tools/check_documents.py`, which the test set does not read, moved with the writing rules, and the gate document
+  a later piece writes links to it.
+- `docs/README.md` gained the index row and the ownership row for the document, `README.md` gained the link in its
+  Documentation section, `to-do.md` gained the two open pieces, and `backlog.md` records the open rule sets with the
+  document each needs. The choice of the two open names is an open decision that measurement cannot answer.
 
-The guard finding this piece measured is in `backlog.md`: check 7 reads only a row's `printed_line`, and the two
-config shape rows state none, so a document that copies a shape name or its description is not a finding for the
-check. The rule that a document names the shape and holds no row wording is read by hand.
-
-Nothing in `src/` or in `tests/` changed, so no pin, no fixture, no golden, no index name and no `docs/LICENSING.md`
-count moved. Gate, measured 2026-11-25 single-threaded on the tree that holds this work: `ruff check .` clean at
-`py310` with the 120-character line length, `ruff format --check .` clean on the 112 files it reads,
-`python3 tools/check_documents.py` reports no finding in 12.28 s, and `python3 -m pytest` in one process, with no
-parallel plugin, exits 0 with 1,857 passed and the same 4 `tflint` skips, so 1,861 pins in 55 test modules, in
-470.76 s. The fast path before the full run answered 43 passed in 1.02 s for `tests/test_layout.py` and
-`tests/test_input_shapes.py`. Run times on this machine move between runs, so each figure here is one measurement.
+Nothing in `src/` or in `tests/` changed, so no pin, no fixture, no golden and no `docs/LICENSING.md` count moved.
+The one pin that can move is `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, because a new
+file under `docs/` is a markdown edit that the index rule reads. Gate, measured 2026-11-25 single-threaded on the
+tree that holds this work: `ruff check .` clean at `py310` with the 120-character line length,
+`ruff format --check .` clean on the 113 files it reads, which is the 112 of the Piece 13C.1 baseline plus this
+document, `python3 tools/check_documents.py` reports no finding in 13.26 s, the fast path answered 1 passed in
+0.62 s for `tests/test_layout.py`, and `python3 -m pytest -p no:cacheprovider` in one process, with no parallel
+plugin, exits 0 with 1,857 passed and the same 4 `tflint` skips, so 1,861 pins in 55 test modules, in 526.48 s; an
+earlier run of the same suite on the same tree answered the same counts in 538.64 s. On these runs the terminal
+writer printed no summary line, so the counts were read from the progress characters and confirmed against
+`python3 -m pytest --collect-only -q`, which names 55 test modules and 1,861 pins. Run times on this machine move
+between runs, so each figure here is one measurement.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/README.md`, `docs/INPUT_SHAPES.md` §1 and §3, `docs/USAGE_GUIDE.md`,
-`docs/DEVICE_GROUP_SPLITTING.md`, `tools/check_documents.py` check 7, `src/input_shapes.py`,
-`src/split_device_groups.py`, `tests/test_input_shapes.py`, `tests/test_layout.py`,
-`tests/test_build_kitchen_sink.py`, `tests/test_split_device_groups.py`, `pyproject.toml`.
+`commit.md`, `README.md`, `docs/README.md`, `docs/ARCHITECTURE.md` §1.1, `tools/check_documents.py` checks 1, 5 and
+7, `tests/test_layout.py`, `src/input_shapes.py`.
 
-The next piece is Piece 14A.1, the two mode values and the level the mode sits at, which needs `docs/IMPORT_BINDING.md`
-§2 decision 1. Epic 13 has no piece left; its open facts are in `backlog.md`.
+The next piece: no Epic 14 piece can be written, because the decisions in `docs/IMPORT_BINDING.md` §2 are untaken,
+so Piece 14A.1 stays blocked on decision 1. The two open process-debt pieces, the gate and CI document and the watch
+list document, are in `to-do.md` and `backlog.md`.
 
 ## Rules to keep when writing documents
 
-- One owner document per rule; every other document links to it.
-- Machine-readable tables are code. A document explains a table and never restates it
-  row by row, so a regenerated table cannot drift.
-- No test counts in a document. A document names the test that pins a rule; the
-  count lives in `agent-status.md` and the git history.
-- A document that names a test names a test that exists.
-- A pin measures content or a name, never the wording of a document. A wording check is a document review, so it
-  lives in `tools/check_documents.py`, which the test set does not read.
-- A claim about what the tool does must name the module or the test that holds it. A
-  feature id is written only when a module or a test uses it as a name.
-- ASD-STE100 Simplified Technical English, no marketing voice, no emoji.
-- A historical record is not kept in the markdown. The git history is the record, and the
-  markdown states the current state.
-- A record is data, so a document describes its fields and never restates a record. The
-  example in `docs/USAGE_GUIDE.md` is an illustration with a shortened hash, not a pin.
-- Completed epic, phase, feature and task detail is removed from the tracking markdown after
-  the work is committed; `AGENTS.md` states the rule.
+The writing rules have an owner document, `docs/WRITING_RULES.md`, named by `docs/README.md` and by the root index.
+This file keeps the status and the links and states no writing rule of its own.
 
 ## Test gate and CI
 

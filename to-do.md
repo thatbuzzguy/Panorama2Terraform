@@ -47,6 +47,21 @@ names the decision it needs.
 - **14C.3** — permanence: `imports.tf` as permanent codebase content or a first-run file, decided on the
   Terraform measurement in fact 10.
 
+## Process debt, the rules with no owner document (the `backlog.md` entry "Permanent rules have no owner document")
+
+- **Piece, the writing rules** — complete on main, 2026-11-25, and committed, so this piece's record lives in the
+  git history. The writing rules moved from `agent-status.md` to their owner document `docs/WRITING_RULES.md`,
+  named by `docs/README.md` and by the root index, and `agent-status.md` keeps the status and the links.
+- **Piece, the gate and CI rules** — open. Needs one owner document named by `docs/README.md`, holding the
+  gate-size decision, the shared test definitions rule, the Python floor rule, the missing-binary skip rule, and the
+  one-owner rule for the tool pins, which `agent-status.md` states with no owner document today. The choice of the
+  name is an open decision that measurement cannot answer, recorded in `backlog.md`.
+- **Piece, the watch list** — open. Needs one owner document named by `docs/README.md`, holding each watched rule
+  with the link to the owner document or module that already states it, and no restatement. The choice of the name
+  is an open decision that measurement cannot answer, recorded in `backlog.md`.
+- Both open pieces are documents only, so the pin they can move is
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, the pin that holds the index rule.
+
 ## Feature-sized items that stay blocked
 
 Feature-sized items that stay blocked on a fact the tool cannot read offline are recorded in
