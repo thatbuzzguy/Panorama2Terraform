@@ -88,15 +88,30 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
 
 ## 2. The decisions to take
 
-Each decision names what it needs. No decision here is taken, so no piece can be written from it yet.
+Each decision names what it needs. Decision 1 is taken, so the piece that reads it can be written; the rest are
+untaken, so no piece can be written from them yet.
 
-1. **The mode values, and the level the mode sits at.** Two values, and each names the plan outcome for one
-   unit: the entries are imported, or the entries are added. The mode sits at the unit level first, because
-   one plan runs inside one unit directory against one state, and a device, a virtual system, a device group,
-   and a template are already units, so a per-device or per-device-group request needs no new level. An
-   entry-level exception is a separate decision: `OWNERSHIP.json` is the record that holds one row per entry
-   the run emits, so an entry-level mode needs a field on that row, and no module may state a second mode
-   rule. Decision needed: whether the mode stops at the unit.
+1. **The mode values, and the level the mode sits at. Taken 2026-11-25: the mode stops at the unit.** Two
+   values, and each names the plan outcome for one unit: the entries are imported, or the entries are added. The
+   mode sits at the unit level, because one plan runs inside one unit directory against one state, and a device, a
+   virtual system, a device group, and a template are already units, so a per-device or per-device-group request
+   needs no new level. An entry level is not part of this decision: `OWNERSHIP.json` is the record that holds one
+   row per entry the run emits, so an entry-level mode would need a field on that row, and this decision takes no
+   field, so no shape gains one and no module states a second mode rule.
+
+   What the decision settles: the pair, the level, and the fact that it takes no field. The pair and the level are
+   data in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`), the module that already holds the binding
+   decision as data (`RULE_DECISION`), owns the block shape and the row shape, and defines no unit rule and no
+   naming rule, so a data constant there adds no row field and moves no committed data file. `unit_manifest.py` is
+   not the owner yet, because its row shape is what decision 2 decides, and the pair has no reader yet for the
+   same reason. Pinned by
+   `tests/test_import_blocks.py::test_the_two_mode_values_are_data_read_through_the_owner`,
+   `tests/test_import_blocks.py::test_the_mode_level_is_the_unit_the_one_unit_rule_answers`,
+   `tests/test_import_blocks.py::test_no_row_shape_names_a_field_for_the_mode`, and
+   `tests/test_import_blocks.py::test_the_mode_data_adds_no_unit_rule_and_no_mode_rule_to_the_owner`.
+
+   What the decision does not settle: the mode's owner as a record field, and the value a run with no mode prints,
+   which are decision 2, with the cost fact 11 names. Piece 14A.2 stays blocked on that decision.
 
 2. **The mode's owner.** The manifest row is the record that names each unit and holds the unit facts, so the
    unit mode is a manifest field: `unit_manifest.parse_rows` reads it, `codebase_state.py` rule 2 merges it,

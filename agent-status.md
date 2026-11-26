@@ -1,53 +1,61 @@
 # Agent Status
 
-## Current position (main, the five pins read the committed pair through the constants, 2026-11-25)
+## Current position (main, Piece 14A.1, the two mode values and the level the mode sits at, 2026-11-25)
 
-Piece, the five pins read the committed pair through the constants, is complete on main, 2026-11-25, and is not
-pushed. It is the process-debt item "The committed pair is stated once as constants, but five pins name it inline"
-in `backlog.md`, and one goal: the five pins read the pair through the constants `tests/conftest.py` owns. Piece
-13C.1 is committed at `cadd33a` and the writing-rules piece at `077cdce`, so their records live in the git history,
-and the full-run baseline this piece starts from is the writing-rules piece's measurement: 1,857 passed and the same
-4 `tflint` skips, so 1,861 pins in 55 test modules. The writing rules are in their owner document
-`docs/WRITING_RULES.md`, so this file keeps the status and the links and states no writing rule of its own.
+Piece 14A.1 is complete on main, 2026-11-25, and is not pushed. It is the first Epic 14 piece that could be written,
+because decision 1 of `docs/IMPORT_BINDING.md` §2 is taken: the mode stops at the unit, and each of the two values
+names the plan outcome for one unit, the entries are imported or the entries are added. One goal: record the decision
+as taken and state the pair and the level as data with the pins that read them as data. Decision 2 is untaken, so the
+piece states no record field, changes no row shape, and moves no committed byte of data. The previous piece, the five
+pins that read the committed pair through the constants `tests/conftest.py` owns, is committed, so its record lives in
+the git history. The baseline this piece starts from is that piece's measurement: 1,857 passed and the same 4 `tflint`
+skips, so 1,861 pins in 55 test modules. The writing rules are in their owner document `docs/WRITING_RULES.md`, so
+this file keeps the status and the links and states no writing rule of its own.
 
-- The five pins call `tests/conftest.py::partial_run` with `CODEBASE_FIXTURE` and `RUN_FIXTURE` and state no name of
-  the pair inline. Inside
-  `tests/test_sanity_gate.py::test_a_partial_run_exit_code_follows_the_rules_that_read_the_files` the argv line that
-  builds the entry point's run from the second fixture reads through `RUN_FIXTURE` too, so that pin reads the pair
-  one way.
-- `CODEBASE_FIXTURE` and `RUN_FIXTURE` are in the import set of `tests/test_data_file_gate.py`,
-  `tests/test_round_trip.py` and `tests/test_sanity_gate.py`. No test module defines a pair of its own for the
-  pattern, no test module imports another test module, and the rule that `tests/conftest.py` is the one place the
-  path to each set is built stayed in `tests/conftest.py` and `docs/ARCHITECTURE.md` §1.1. `partial_run` still takes
-  the two names as an argument and states no fixture name of its own.
-- Nothing that reads names can move for this change. No pin in these three modules reads a test module source, so the
-  pins that read a source read `sanity_checks.py`, and `tests/test_layout.py` reads names. The pins that hold the
-  pair as data, the three-run measurement in
-  `tests/test_sanity_gate.py::test_for_a_single_run_the_run_set_and_the_record_set_are_the_same_set`, and the fixture
-  constants the three modules hold for their own facts, are not the pattern the pins read, so they were left alone
-  and recorded in `backlog.md`.
-- Docstring prose: three of the five pins state the fixture names inside their measurement as prose, and the prose
-  agrees with the code after the change, so the prose stays as it is.
+- The data is in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`), the module decision 1 names as the owner,
+  because it already holds the binding decision as data (`RULE_DECISION`), owns the block shape and the row shape
+  (`IMPORT_ROW_FIELDS`), and defines no unit rule and no naming rule, so a data constant there adds no row field and
+  moves no committed data file. `src/unit_manifest.py` was not chosen, because its row shape is what decision 2
+  decides, and naming it as the owner would pre-empt that decision. The module's rule list gained rule 7, which states
+  the decision, the date, the owner, and that no row shape gains a field for the mode.
+- The pins are group 8 of `tests/test_import_blocks.py`, four of them: the pair reads as data and has two members;
+  the level is the unit the one unit rule answers, so it equals `unit_manifest.FIELD_ORDER[0]` and is not in
+  `unit_manifest.FACT_KEYS`, measured through `unit_manifest.units` over rows read back through `parse_rows`; no row
+  shape names a field for the mode, read through each shape owner and through a run; and the owner defines no unit
+  rule, no level rule and no mode reader, so no module holds the pair or the level a second time. The pins read the
+  pipeline in process and read every shape through its owner, so no test module states a shape rule, a unit rule or a
+  file set of its own.
+- The pair has no reader yet, because decision 2 names no field and decision 3 names no argument, so the data reaches
+  no output and the pins read the constants directly. That is recorded in `backlog.md`, with the half of the piece
+  that would have stated the mode as a record field, which stays blocked on decision 2 and fact 11.
 - Gate, measured 2026-11-25 single-threaded on the tree that holds this work: `ruff check .` clean at `py310` with
-  the 120-character line length, `ruff format --check .` clean on the 113 files it reads, which is the same 113 as
-  the baseline, `python3 tools/check_documents.py` reports no finding in 8.91 s, the fast path answered 1 passed in
-  0.56 s for `tests/test_layout.py`, and `python3 -m pytest -p no:cacheprovider` in one process, with no parallel
-  plugin, exits 0 with 1,857 passed and the same 4 `tflint` skips, so 1,861 pins in 55 test modules, in 378.12 s.
-  `tflint` is absent on this machine, so the four skips are the four `tflint` pins in `tests/test_sanity_gate.py`,
-  and `terraform` is present, so the provider-schema pins ran. No count moved, because this piece adds no pin; the
-  pin count was confirmed against `python3 -m pytest --collect-only -q`, which names 55 test modules and 1,861 pins
-  on the tree before the change and on the tree that holds it. Run times on this machine move between runs, so each
-  figure here is one measurement.
+  the 120-character line length, `ruff format --check .` clean on the same 113 files, because no file is added,
+  `python3 tools/check_documents.py` reports no finding in 11.85 s, and `python3 -m pytest -p no:cacheprovider` in one
+  process,
+  with no parallel plugin, exits 0 with 1,861 passed and the same 4 `tflint` skips, so 1,865 pins in 55 test modules,
+  in 292.64 s. The pin count moved from 1,861 to 1,865, the four pins this piece adds, all in
+  `tests/test_import_blocks.py`; the test module count stayed 55 and the format file count stayed 113. The pin count
+  was confirmed against `python3 -m pytest --collect-only -q`, which names 55 test modules and 1,865 pins on the tree
+  that holds the work. `tflint` is absent on this machine, so the four skips are the four `tflint` pins in
+  `tests/test_sanity_gate.py`, and `terraform` is present, so the provider-schema pins ran. Run times on this machine
+  move between runs, so each figure here is one measurement.
+- Document review: one finding is open in `backlog.md`. `docs/IMPORT_BINDING.md` §1 fact 11 says a mode field moves
+  the committed golden data files; the goldens hold no data file, so the set the sentence means is the pins that read
+  each record as data through its module, and no committed byte moves today. The sentence should name those pins, and
+  the piece that takes decision 2 names them. No other finding was opened by this piece.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `README.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/MULTI_RUN_CODEBASE.md` §5 and §6,
-`pyproject.toml`, `tools/check_documents.py`, `tests/conftest.py`, `tests/test_layout.py`, and the three modules the
-change is in: `tests/test_data_file_gate.py`, `tests/test_round_trip.py`, `tests/test_sanity_gate.py`.
+`commit.md`, `README.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/IMPORT_BINDING.md`,
+`docs/ARCHITECTURE.md` §1.1, §3.2, §4.6, §4.8, §5 and §6, `docs/CODEBASE_ASSEMBLY.md` §7 and §14,
+`docs/MULTI_RUN_CODEBASE.md` §2 and §5, `tools/check_documents.py`, `src/import_blocks.py`, `src/unit_manifest.py`,
+`src/ownership.py`, `src/codebase_state.py`, `tests/conftest.py`, `tests/test_import_blocks.py`,
+`tests/test_unit_manifest.py`, `tests/test_data_file_gate.py`, `tests/test_layout.py`.
 
-The next piece: no Epic 14 piece can be written, because the decisions in `docs/IMPORT_BINDING.md` §2 are untaken,
-so Piece 14A.1 stays blocked on decision 1. The two open process-debt pieces, the gate and CI document and the watch
-list document, are in `to-do.md` and `backlog.md`. No decision was taken by this piece, and no document-review
-finding was opened by it.
+The next piece: Piece 14A.1 could not be finished as written, because half of it states the mode as a record field
+and that half is blocked on decision 2, so the pair and the level are recorded as data only. Piece 14A.2 stays
+blocked on decision 2 and fact 11. The two open process-debt pieces, the gate and CI document and the watch list
+document, are in `to-do.md` and `backlog.md`. Decision 1 is taken by this piece; decision 2, the mode's owner as a
+record field and the value a run with no mode prints, is the next decision to take.
 
 ## Rules to keep when writing documents
 

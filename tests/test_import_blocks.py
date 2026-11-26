@@ -1,6 +1,6 @@
 """F6.4: import blocks, one block per entry, as `imports.tf`.
 
-Seven rules, one per group here:
+Eight groups, one per rule set here:
 
 1. The id encoding: base64 of the JSON object, keys sorted at every level; `decode_id` is its inverse and
    refuses a shape it does not declare.
@@ -15,6 +15,9 @@ Seven rules, one per group here:
    the same `.tf` bytes as before.
 7. The file shape, the reader, and the opt-in: `to` then `id`, one `.tf` file per run, `CHECK_ORDER` names
    `import_blocks`, and `--import-blocks` is off by default.
+8. The mode as data, at the unit (`docs/IMPORT_BINDING.md` §2 decision 1, taken 2026-11-25): the two values and
+   the level read as data through the owner, the fact that no row shape names a field for the mode, and the fact
+   that the owner states no unit rule, no level rule and no mode reader of its own.
 
 The pinned provider fact is the object the provider docs import line for `panos_address` encodes.
 """
@@ -24,9 +27,14 @@ from pathlib import Path
 
 import pytest
 
+import entry_coverage
 import import_blocks
+import ownership
 import panorama_to_terraform as module
+import reference_edges
+import rule_data
 import sanity_checks
+import site_data
 import unit_manifest
 from conftest import (
     FIXTURES_DIR,
@@ -36,6 +44,7 @@ from conftest import (
     corpus_fixtures,
     file_text,
     parts,
+    record_rows,
     run_script,
     tf_files,
 )
@@ -374,3 +383,81 @@ def test_the_opt_in_appears_in_help_and_defaults_off(tmp_path):
     assert "--import-blocks" in run_script(CONVERTER, "--help").stdout
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
     assert not parts(tf_files(tmp_path), IMPORTS)
+
+
+# --- 8. The mode as data, at the unit (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) ---
+
+
+def test_the_two_mode_values_are_data_read_through_the_owner():
+    """Decision 1 takes two values, so the pin reads them as data through the owner the decision names,
+    `src/import_blocks.py`, and not through the wording of `docs/IMPORT_BINDING.md`.
+
+    Measured 2026-11-25 on the tree that holds the decision: the pair is `imported` and `added`, the plan
+    outcome for one unit, and it has two members, so a third value moves this pin with the decision.
+    """
+    assert import_blocks.MODE_VALUES == ("imported", "added")
+    assert len(import_blocks.MODE_VALUES) == 2, "the decision takes two values, so the pair has two members"
+
+
+def test_the_mode_level_is_the_unit_the_one_unit_rule_answers(tmp_path):
+    """Decision 1 stops the mode at the unit, so the level the data names is the unit identity the manifest row
+    already states and not one of the five scope facts: a device, a virtual system, a device group and a template
+    are already units, so a per-device or per-device-group request needs no new level.
+
+    Measured 2026-11-25 on `SAMPLE_CONFIG` run through the pipeline, with the rows read back through `parse_rows`
+    and the unit set read through `units`, so this pin states no unit rule of its own.
+    """
+    out = tmp_path / "run"
+    assert _run(SAMPLE_CONFIG, out, ("--import-blocks",)).returncode == 0
+    rows = unit_manifest.parse_rows((out / unit_manifest.MANIFEST_FILE).read_text(encoding="utf-8"))
+    assert rows, "the pin reads a record with content"
+    assert len(unit_manifest.units(rows)) == len(rows), "the record is one row per unit"
+    level = import_blocks.MODE_LEVEL
+    assert level == "unit", level
+    assert level == unit_manifest.FIELD_ORDER[0], "the level names the unit identity the row states"
+    assert level not in unit_manifest.FACT_KEYS, "the mode does not sit at a scope-fact level"
+    for row in rows:
+        assert row[level] == unit_manifest.unit_name(unit_manifest.facts_of(row)), row
+
+
+def test_no_row_shape_names_a_field_for_the_mode(tmp_path):
+    """Decision 1 takes no field, so the mode is data no row carries. Each shape is read through the module that
+    owns it, and none names a field for the mode, so a run writes no key for it and the decision moves nothing
+    committed. The entry level is the level `OWNERSHIP.json` keys on, so an entry-level mode would need a field on
+    that row; the data names one level only, the unit, so no entry level enters a shape.
+
+    Measured 2026-11-25 on `SAMPLE_CONFIG` run through the pipeline, with each row read back through its module's
+    `parse_rows`, so this pin states no shape of its own.
+    """
+    shapes = {
+        "import_blocks": import_blocks.IMPORT_ROW_FIELDS,
+        "unit_manifest": unit_manifest.FIELD_ORDER,
+        "ownership": ownership.FIELD_ORDER,
+        "reference_edges": reference_edges.FIELD_ORDER,
+        "rule_data": rule_data.RULE_ROW_FIELDS,
+        "site_data": site_data.SITE_ROW_FIELDS,
+    }
+    for name, shape in shapes.items():
+        assert "mode" not in shape, (name, "the shape states no field for the mode")
+    out = tmp_path / "run"
+    assert _run(SAMPLE_CONFIG, out, ("--import-blocks",)).returncode == 0
+    rows = record_rows(out)
+    assert any(rows.values()), "the pin reads a record with content"
+    for record_module, record in rows.items():
+        for row in record:
+            assert "mode" not in row, (record_module.__name__, row)
+    assert import_blocks.MODE_LEVEL not in ownership.FIELD_ORDER, "the entry level is not the mode's level"
+
+
+def test_the_mode_data_adds_no_unit_rule_and_no_mode_rule_to_the_owner():
+    """Decision 1 names values and a level, and no rule, so the owner holds data only: the unit rule stays
+    `unit_manifest.units`, the row reader stays each record module's `parse_rows`, and no module holds the pair or
+    the level a second time. The pin reads the owner's source for the definitions it does not define and the
+    module objects for the names they do not hold.
+    """
+    source = (SRC_DIR / "import_blocks.py").read_text(encoding="utf-8")
+    for rule in ("def units", "def facts_of", "def parse_rows", "def mode"):
+        assert rule not in source, f"import_blocks.py states a rule its owner defines ({rule})"
+    for other in (unit_manifest, ownership, reference_edges, rule_data, site_data, entry_coverage, sanity_checks):
+        assert not hasattr(other, "MODE_VALUES"), (other.__name__, "a second pair of mode values")
+        assert not hasattr(other, "MODE_LEVEL"), (other.__name__, "a second level for the mode")

@@ -16,9 +16,15 @@ names the decision it needs.
 
 ### Phase 14A, the mode as data
 
-- **14A.1** — the two mode values and the level the mode sits at (§2 decision 1). Needs the decision on
-  whether the mode stops at the unit, because a device group, a template, a vsys and a device are already
-  units.
+- **14A.1** — complete on main, 2026-11-25, and committed, so this piece's record lives in the git history. The
+  decision is taken: the mode stops at the unit, and each of the two values names the plan outcome for one unit. The
+  pair and the level are data in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`), the module that already holds
+  the binding decision as data, owns the block shape and the row shape, and defines no unit rule, and the pins that
+  read them as data are in `tests/test_import_blocks.py`. No row shape names a field for the mode, so the piece
+  moved no committed data file.
+- **The half of 14A.1 that states the mode as a record field** stays open and is recorded in `backlog.md`, because
+  decision 2 is untaken and fact 11 names the pins a field moves. It is not piece 14A.2's work: piece 14A.1 could
+  not name a value for a run that declares no mode, so it recorded the pair as data only.
 - **14A.2** — the record field that holds the mode: read through `unit_manifest.parse_rows`, merged through
   `codebase_state.py` rule 2, and read by the `data_files` gate rule. Needs decision 2 and the answer to
   fact 11, because a field that enters the shape moves the committed rows.
