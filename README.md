@@ -64,19 +64,21 @@ generated `README.md`, because a `data` block resolves at plan time and the plan
 entry is not present in the location the block names. The rule is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.7.
 
-Write one `import` block per entry, so the first plan for a directory reads
+Write one `import` block per entry of a unit the declaration marks, so the first plan for a directory reads
 `N to import, 0 to add, 0 to change, 0 to destroy` for the entries the parse models:
 
 ```bash
-python3 src/panorama_to_terraform.py your_export.xml --import-blocks
+python3 src/panorama_to_terraform.py your_export.xml --import-mode device-group/entry/Datacenter-FW=imported
 ```
 
-Off by default. A run that declares it writes `imports.tf`, one block per entry, in unit order then
-local-name order. Each block states `to` and `id`, and `id` is base64 of the location object plus the
-entry name, built from the same data the resource block uses. A gate rule reads the file and refuses a
-block that does not agree with the resource block it names. The four `*_policy_rules` types write no
-block, because their import object names the rulebase, the position, and a list of names; each rule
-entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.8.
+Off by default. A run that declares no pair writes no `imports.tf`. A pair is one scope path and one value of the
+mode, joined by `=`, and the argument is repeatable; the pairs are sorted by the place they name, so the order they
+were declared in changes nothing. A marked unit writes its blocks in its own `imports.tf`, in unit order then
+local-name order, and a unit marked with the other value writes none. Each block states `to` and `id`, and `id` is
+base64 of the location object plus the entry name, built from the same data the resource block uses. A gate rule
+reads the file and refuses a block that does not agree with the resource block it names. The four
+`*_policy_rules` types write no block, because their import object names the rulebase, the position, and a list of
+names; each rule entry is a WARN finding. The rule is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.8.
 
 ## Requirements
 
@@ -260,9 +262,9 @@ a source. The other files are the unit set, and the run writes one directory per
   `SCOPE_LEVEL_ORDER`). A device membership prints as the list of objects the provider takes, and the
   PAN-OS "this device" placeholder names no firewall, so it never enters a printed list
   ([`docs/CODEBASE_ASSEMBLY.md`](docs/CODEBASE_ASSEMBLY.md) §8)
-- `imports.tf` - one `import` block per entry the run declares, as `to` and `id`
-  ([`src/import_blocks.py`](src/import_blocks.py)). Written only for a run that declares `--import-blocks` and
-  has a block to write, and the gate rule reads it because it is a `.tf` file
+- `imports.tf` - one `import` block per entry of a unit the declaration marks, as `to` and `id`
+  ([`src/import_blocks.py`](src/import_blocks.py)). Written only for a marked unit that has a block to write, and the
+  gate rule reads it because it is a `.tf` file
 - `actions.tf` - the commit and push actions: one block per action the pinned schema declares, for each unit the
   manifest names, and each block names the fact its own unit selects
   ([`src/commit_actions.py`](src/commit_actions.py)). Written by every run that has such a unit, as the last `.tf` file,
@@ -324,7 +326,7 @@ manifest names, holding that unit's `.tf` files and the printed form of that uni
     vpn.tf
     security_rules.tf  nat_rules.tf  decryption_rules.tf  pbf_rules.tf
     security_rules.json  security_rules.csv   (the rule data pair, one pair per rule type that has rows)
-    read_through.tf  imports.tf        (opt-in: --data-blocks, --import-blocks)
+    read_through.tf  imports.tf        (opt-in: --data-blocks, --import-mode)
     actions.tf                         (the commit and push actions per unit, the last .tf file written)
     site.auto.tfvars                   (the printed form of that unit's site row)
 ```
@@ -627,7 +629,8 @@ The emit set and the naming rules:
 - `tests/test_import_blocks.py` - the import blocks (`imports.tf`): the id encoding and its inverse, the
   agreement gate rule and each violation type, the rule that the corpus writes no finding, the decision
   for the four `*_policy_rules` types, the rule that the block and the id come from one location rule and
-  one naming rule, the order, and the byte rules between two runs and for a run that declares nothing
+  one naming rule, the order, and the byte rules between two runs and for a run that declares nothing, plus the
+  pin that measures which unit writes the blocks through the declaration
 - `tests/test_commit_actions.py` - the commit action per unit (`actions.tf`): one block per unit the
   manifest names, the fact its own unit selects, the unit that writes no action, the address that answers
   the names inside the block, the order, the file written only when it has content, each violation type of
@@ -643,7 +646,11 @@ The records, the reports, and the write path:
   and the exit codes, and the byte rule between two runs. F8.7: the unit join in `api_requests.py` reads
   this unit set through `unit_manifest.units`, so path 2 states no second unit rule, and the same rule reads
   the codebase's set from the rows a record read back, so the two sets differ only by the units a run read
-  only through the record, and the units an update run wrote files inside
+  only through the record, and the units an update run wrote files inside. The declaration rule is read here:
+  the pairs name the units inside the place through the one unit rule and the one place-to-fact pair, the pairs
+  are sorted by name, the row prints the value for a unit a pair names and the empty answer for one it does not,
+  two values for one unit are refused before the first write, the argument is held by the CLI, and the write step
+  reads the answer through this module
 - `tests/test_ownership.py` - the owner of a repeated name as data (`OWNERSHIP.json`): one row per entry a
   matrix row covers, the join to the manifest, the seven emitters that print the flag, the finding the rule
   cannot decide, and the golden bytes
@@ -713,7 +720,8 @@ The coverage sets:
 
 - `tests/test_container_coverage.py` - the container table and the code stay
   in step: no parse method without a row, no row naming a path the method
-  does not read, and the definitions rule read through the place a declared path names
+  does not read, the definitions rule read through the place a declared path names, and the fact a place
+  names, read through this module's own scope-walk rows, so no module holds a mapping of its own
 - `tests/test_entry_coverage.py` - every parse method that reads entries
   marks them, so the per-entry report cannot lie
 - `tests/test_property_coverage.py` - what a matrix row declares against what an output reads, per container

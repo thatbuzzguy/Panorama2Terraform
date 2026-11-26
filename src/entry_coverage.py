@@ -125,14 +125,14 @@ NON_FIELD_KEYS = frozenset({"name"}) | frozenset(container_coverage.SCOPE_FACT_K
 # state scan (F5.6) both drop it through this one definition.
 EMPTY_FIELD_VALUES = (None, "", [], {}, ())
 
-# Which report key each scope container fills. The container set is
-# container_coverage.SCOPE_CONTAINERS, so this is the mapping, not a second rule.
+# Which report key each scope container fills, held as the scope-walk rows of the container table. The pair between
+# a place and the fact it names is stated once, in `container_coverage.py` rule 4, so this reads the pair through
+# that owner through `fact_of_place` and holds no mapping of its own. A place that names no fact has no row here,
+# which is why `shared` answers no report key and `name_field` keeps `name` for it.
 REPORT_SCOPE_KEYS = {
-    "device-group": "device_group",
-    "vsys": "vsys",
-    "templates": "template",
-    "devices": "vsys_device",
-    "template-stack": "template_stack",
+    row.path: container_coverage.fact_of_place(row.path)
+    for row in container_coverage.CONTAINER_TABLE
+    if row.read_via == "scope walk"
 }
 
 REPORT_FILE = "CONVERSION_REPORT.txt"

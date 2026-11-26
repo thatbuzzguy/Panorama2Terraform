@@ -1281,7 +1281,7 @@ def test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_t
         "validate",
         "tflint",
         "data_blocks",
-        "import_blocks",
+        "import_mode",
         "state",
         "workspace",
         "prune_cache",

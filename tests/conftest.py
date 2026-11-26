@@ -26,6 +26,7 @@ import pytest
 import api_requests
 import codebase_state
 import commit_actions
+import container_coverage
 import entry_coverage
 import import_blocks
 import input_shapes
@@ -34,6 +35,7 @@ import rule_data
 import sanity_checks
 import source_fetch
 import split_device_groups
+import unit_manifest
 import write_path
 import xml_input
 
@@ -156,6 +158,60 @@ RULE_TYPES = tuple(sorted(import_blocks.rule_types()))
 # `tests/test_data_file_gate.py` and `tests/test_codebase_state.py`. The answer for a unit the run did not mark is
 # read through `unit_manifest`, the owner decision 2 names, so this file holds no copy of it.
 MODE_VALUES = import_blocks.MODE_VALUES
+
+# --- The declaration the pins read (Epic 14, decision 3, taken 2026-11-26) ----
+
+# The pair between a place and the fact it names is stated once, in `container_coverage` rule 4, so a pin that builds
+# a declaration reads the pair through that owner and holds no mapping of its own. Three test modules build a
+# declaration from a run's rows (`tests/test_import_blocks.py`, `tests/test_site_data.py` and
+# `tests/test_unit_manifest.py`), so the builder lives here. A pair is content, not a rule: the scope shape is the
+# argument rule's, and the value is read through its owner by the caller. The argument name is the CLI's, so a pin
+# that runs a script with a declaration reads the set through `shared_arguments` and names the argument once, here.
+DECLARATION_ARGUMENT = "--import-mode"
+
+# The join the argument shape states. It is stated once here, so a pin that measures a refusal does not state the
+# pair shape a second time.
+PAIR_JOIN = "="
+
+
+def pair_for(place: str, name: str, value: str) -> tuple:
+    """One pair, as the argument rule reads it: the place, the entry name the pair states, and the value. The entry
+    segment is read through its owner `xml_input`, so a pin that builds a pair states no path shape of its own, and
+    `unit_manifest.pair_parts` reads the pair back, so no pin states the split either.
+    """
+    return ("/".join((place, xml_input.ENTRY_SEGMENT, name)), value)
+
+
+def pair_text(pair: tuple) -> str:
+    """The pair as one argument the run reads, through the join stated once above."""
+    return f"{pair[0]}{PAIR_JOIN}{pair[1]}"
+
+
+def declaration_pairs(rows: list, value: str) -> tuple:
+    """The pairs a run would declare for the units its rows show, as `(path, value)`, in the order the argument rule
+    sorts them. `rows` is a record read back through the `parse_rows` of the module that owns its shape.
+
+    The place is read through `container_coverage` rule 4 (`fact_of_place`) and the name through `unit_manifest.fact`
+    and `facts_of`, so this builder holds no mapping and no row shape of its own.
+    """
+    walk_rows = [entry for entry in container_coverage.CONTAINER_TABLE if entry.read_via == "scope walk"]
+    pairs = set()
+    for row in rows:
+        for walk in walk_rows:
+            key = container_coverage.fact_of_place(walk.path)
+            name = unit_manifest.fact(unit_manifest.facts_of(row), key)
+            if name:
+                pairs.add(pair_for(walk.path, name, value))
+                break
+    return tuple(sorted(pairs))
+
+
+def declaration_args(pairs: tuple) -> tuple:
+    """The same pairs as the arguments a run reads, one pair per argument, in the order the argument rule sorted
+    them. Three test modules run a script with a declaration, so the argument shape is stated once here and no test
+    module states it a second time.
+    """
+    return tuple(arg for pair in pairs for arg in (DECLARATION_ARGUMENT, pair_text(pair)))
 
 
 def data_file_set(output_dir) -> list[str]:

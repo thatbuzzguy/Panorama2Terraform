@@ -1,7 +1,7 @@
 """F6.1 the unit as data: one manifest row per declared scope, as `CODEBASE_MANIFEST.json`.
 
 A unit is one declared scope (`docs/CODEBASE_ASSEMBLY.md` §1). The manifest is the shape a
-codebase needs before a directory, an owner, or a reference edge can be named. Five rules,
+codebase needs before a directory, an owner, or a reference edge can be named. Six rules,
 stated once here.
 
 1. The unit. One unit is one combination of the five scope facts (`ARCHITECTURE.md` §2.2), and
@@ -49,6 +49,24 @@ stated once here.
    names each unit; a fourth data file that listed directories would be a second place that states
    the unit set. This module states the row shape only. `reference_edges.order` fills the two
    fields, because the order comes from the three rules `reference_edges.py` states.
+6. The declaration names units, and a mode a run declares must agree with the mode the merged record names for
+   the same unit (`docs/IMPORT_BINDING.md` §2, decision 3, taken 2026-11-26). One pair is one scope path and one
+   value of the pair. The pair reaches a unit through `container_coverage.fact_of_place`, the one place that states
+   the pair between a place and a fact, so this module holds no mapping of its own: `pair_parts` reads the place and
+   the name through `container_coverage.path_segments` and `fact_of_place`, and the unit through `units` and `fact`,
+   so no second unit rule appears here and no directory is named. A unit a pair names prints that pair's value on
+   its row, and a unit no pair names prints `EMPTY_ANSWER`, so a run that declares nothing writes the bytes it
+   writes today. Two modes for one unit are refused as an input refusal (`xml_input.UnsafeInputError`), so the run
+   exits 1 and writes no file, following `state_input.py` rule 5; the line names the unit, the mode the record
+   names, and the mode the run declares. The value that writes blocks is read positionally through
+   `import_blocks.MODE_VALUES`, so this module states no value of the pair, and the write step answers whether a
+   unit writes blocks through `unit_writes_blocks`. The argument is held by the CLI, so this module states no flag
+   of its own, and the pair shape errors are the CLI's rule and exit 2. Pinned by
+   `tests/test_unit_manifest.py::test_the_declaration_names_the_units_inside_the_scope_through_the_one_unit_rule`,
+   `tests/test_unit_manifest.py::test_a_declared_unit_prints_its_mode_and_an_undeclared_unit_prints_the_empty_answer`,
+   `tests/test_unit_manifest.py::test_a_declared_mode_that_disagrees_with_the_record_is_refused_and_writes_no_file`,
+   `tests/test_unit_manifest.py::test_the_write_step_reads_the_mode_through_the_row_owner_and_names_no_value`, and
+   `tests/test_unit_manifest.py::test_the_declaration_is_held_by_the_cli_and_the_rule_owner_states_no_flag_of_its_own`.
 
 The reference names are recorded by the reference rule (`TerraformGenerator.name_ref`) at the site
 that applies it and arrive here as `references`; this module resolves no name. The sanitizing rule is
@@ -66,7 +84,7 @@ reads the row through `parse_rows` and states no value set of its own. Pinned by
 Usage:
     from unit_manifest import MANIFEST_FILE, build_rows, render, parse_rows
     from write_path import root_path, write_file
-    rows = build_rows(ledger, generator.unit_references(), generator.sanitize_name)
+    rows = build_rows(ledger, generator.unit_references(), generator.sanitize_name, pairs)
     rows = reference_edges.order(rows, ownership_rows, edge_rows)    # rule 5: fills rank and after
     write_file(root_path(output_dir, MANIFEST_FILE), render(rows))
     for row in parse_rows((output_dir / MANIFEST_FILE).read_text(encoding='utf-8')):
@@ -82,6 +100,7 @@ from collections.abc import Callable
 import container_coverage
 import import_blocks
 from naming import UNNAMED
+from xml_input import UnsafeInputError
 
 MANIFEST_FILE = "CODEBASE_MANIFEST.json"
 
@@ -202,13 +221,84 @@ def units(source) -> list:
     return sorted({facts_of(row) for row in rows}) if rows else []
 
 
-def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list:
+def pair_parts(path: str) -> tuple:
+    """Rule 6: the fact key a declared pair names, and the name it declares.
+
+    The place is the first segment and the entry name is the last, so both are read through the one scope path
+    definition (`container_coverage.path_segments`) and the one place-to-fact pair
+    (`container_coverage.fact_of_place`). A pair that names the place only answers an empty name, which the argument
+    rule refuses, so this rule answers no error of its own and states no path shape.
+    """
+    segments = container_coverage.path_segments(path)
+    key = container_coverage.fact_of_place(container_coverage.path_place(path))
+    return (key, segments[-1] if len(segments) > 1 else "")
+
+
+def declared_mode(facts: tuple, declaration) -> str:
+    """Rule 6, read from a unit: the value the pair that names this unit states, or `EMPTY_ANSWER` for a unit no
+    pair names.
+    """
+    for path, value in declaration:
+        key, name = pair_parts(path)
+        if key and name and fact(facts, key) == name:
+            return value
+    return EMPTY_ANSWER
+
+
+def check_declared_modes(declaration, record_rows: list, source) -> None:
+    """Rule 6: a mode a run declares must agree with the mode the merged record names for the same unit.
+
+    `record_rows` is the record read back through `parse_rows`, so the value is read through the shape its owner
+    states and no second reader appears. `source` is the row set the run built, read through `units`. For a unit the
+    run built, `codebase_state.py` rule 2 answers the merged row as the run's own row, so the merged answer is the
+    value the declaration states for that unit, read through `declared_mode`; a disagreement there is two pairs that
+    name the same unit. For a unit the run read only through the record, the merged row is the record row, so the
+    disagreement is between that row's value and the value this run declares. The refusal is the kind `is_refusal`
+    states, so the entry point prints the refusal line, exits 1, and writes no file, the same shape
+    `state_input.py` rule 5 states.
+    """
+    built = set(units(source))
+    for path, value in declaration:
+        key, name = pair_parts(path)
+        if not (key and name):
+            continue
+        answers = [(unit_name(facts), declared_mode(facts, declaration)) for facts in built if fact(facts, key) == name]
+        if not answers:
+            answers = [
+                (row["unit"], row["mode"]) for row in record_rows if row["mode"] and fact(facts_of(row), key) == name
+            ]
+        for unit, answer in answers:
+            if answer != value:
+                raise UnsafeInputError(
+                    f"refusing to declare two modes for unit {unit}: the merged record names {answer} "
+                    f"and this run declares {value}"
+                )
+
+
+def unit_writes_blocks(rows: list, facts: tuple) -> bool:
+    """Rule 6, the write answer: True when the row for this unit states the pair value that writes blocks.
+
+    The value is read positionally through `import_blocks.MODE_VALUES`, the module that holds the pair as data, so
+    this module states no value of the pair, and `import_blocks.py` rule 7 states no mode rule of its own. A unit that
+    names no row writes nothing. This module writes no file: it answers the fact, and `write_path.py` writes.
+    """
+    for row in rows:
+        if facts_of(row) == facts:
+            return row["mode"] == import_blocks.MODE_VALUES[0]
+    return False
+
+
+def build_rows(ledger, references: dict, sanitize: Callable[[str], str], declaration: tuple = ()) -> list:
     """One row per unit the ledger shows, in identity order.
 
     `references` is the reference names `name_ref` recorded, keyed by the referrer's facts. A unit
     exists only when the ledger has a report row in it, so a reference recorded for a unit with no
     row adds nothing here; `tests/test_unit_manifest.py` pins that every recorded name belongs to
     a unit the ledger shows across the fixture corpus.
+
+    `declaration` is the pairs the run declared, in the order rule 6 reads them. A unit a pair names prints that
+    pair's value, and a unit no pair names prints `EMPTY_ANSWER`, so a run that declares nothing writes the row it
+    writes today.
     """
     counts: dict = {}
     for row in ledger.rows():
@@ -217,8 +307,9 @@ def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list
     rows = []
     for facts in units(ledger):  # rule 1: the unit set is read through this one rule
         row = dict.fromkeys(FIELD_ORDER, EMPTY_ANSWER)
-        # `mode` is written as the empty answer here, because no argument declares a mode yet (decision 3),
-        # so a run marks no unit and every row states the answer for a unit the run did not mark.
+        # Rule 6: the mode is the value of the pair that names this unit, or the empty answer for a unit the run
+        # declared no pair for, so a run that declares nothing states the answer for a unit it did not mark.
+        row["mode"] = declared_mode(facts, declaration)
         # `facts` is a row read through `facts_of`, which reads it through FACT_KEYS, so the two sides are
         # the same set. `strict` states that, so a row with a fact missing cannot write a short row.
         row.update(zip(FACT_KEYS, facts, strict=True))

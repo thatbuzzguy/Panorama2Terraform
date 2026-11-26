@@ -35,9 +35,14 @@ An import block binds a resource block to the object the provider already has. S
 7. **The mode values as data, at the unit.** Decision 1 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) takes two
    values and one level, and this module holds them as data (`MODE_LEVEL`, `MODE_VALUES`) and no field. Decision 2
    (taken 2026-11-25) names `unit_manifest.py` as the owner of the row field, so `unit_manifest.parse_rows` is the
-   reader that uses the pair, and the answer for a unit the run did not mark is stated in that module. The unit is
-   read through `unit_manifest.units`, the one unit rule, so this module states no unit rule, no level rule, no
-   reader, no field name and no mode rule of its own. Pinned by `tests/test_import_blocks.py` group 8.
+   reader that uses the pair, and the answer for a unit the run did not mark is stated in that module. Decision 3
+   (taken 2026-11-26) takes the argument that declares the pair, and the argument is held by the CLI, so this module
+   states no argument and no reader of one; the write step answers whether a unit writes blocks through the row owner
+   `unit_manifest.py`, which reads the value that writes blocks positionally through `MODE_VALUES`.
+   The unit is read through `unit_manifest.units`, the one unit rule, so this module states no unit rule, no level
+   rule, no reader, no field name and no mode rule of its own. Pinned by `tests/test_import_blocks.py` group 8, and
+   by `::test_a_unit_declared_the_block_value_writes_blocks_and_a_unit_declared_the_other_value_writes_none` for the
+   unit that writes the blocks.
 
 Usage:
     from import_blocks import IMPORT_FILE, IMPORT_ROW_FIELDS, build_id, decode_id, read_block, render, row

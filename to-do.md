@@ -16,18 +16,20 @@ names the decision it needs.
 
 ### Phase 14A, the mode as data
 
-- **14A.1** and **14A.2** are complete on main, 2026-11-25, and committed, so their records live in the git history.
-  Decision 1 is taken: the two values, and the level the mode sits at. Decision 2 is taken: the field, the owner that
-  states it, and the answer for a unit the run did not mark. The pair and the level are data in
-  `src/import_blocks.py`, the field is data in `src/unit_manifest.py`, and the pins that read them as data are in
-  `tests/test_import_blocks.py` group 8, `tests/test_unit_manifest.py`, `tests/test_data_file_gate.py` and
-  `tests/test_codebase_state.py`, with the pair read through `tests/conftest.py`. No committed golden byte moved,
-  because `tests/golden` holds no data file.
-- **14A.3** — the declaration argument: a scope-name argument read through `container_coverage.is_scope_path`
-  and `SCOPE_PATH_ROOTS`, held by the CLI and not by a rule owner. Needs decision 3, which is also the decision
-  that an order-dependent declaration is refused.
+- **14A.1** to **14A.3** are complete on main, 14A.3 on 2026-11-26, and committed, so their records live in the git
+  history. Decision 1 is taken: the two values, and the level the mode sits at. Decision 2 is taken: the field, the
+  owner that states it, and the answer for a unit the run did not mark. Decision 3 is taken, 2026-11-26: the
+  declaration names units through `scope=mode` pairs sorted by place, the argument is `--import-mode` held by the CLI,
+  a declaration that disagrees with a record row is refused before the first write, and `--import-blocks` is removed.
+  The pair and the level are data in `src/import_blocks.py`, the field and the declaration rule are data and rules in
+  `src/unit_manifest.py`, the pair between a place and the fact it names is rule 4 of `src/container_coverage.py`, and
+  the pins that read them as data are in `tests/test_import_blocks.py` group 8 and group 9,
+  `tests/test_unit_manifest.py` group 10, `tests/test_container_coverage.py` group 5,
+  `tests/test_data_file_gate.py` and `tests/test_codebase_state.py`, with the pair and the declaration shape read
+  through `tests/conftest.py`. No committed golden byte moved, because `tests/golden` holds no data file.
 - **14A.4** — the report section that names the units a run bound, through `entry_coverage.py` and the F3.9
-  grouping rule, so no module states a second unit set or a second grouping rule.
+  grouping rule, so no module states a second unit set or a second grouping rule. Needs decision 4, the whole-block
+  fact's name, owner and severity.
 
 ### Phase 14B, the facts an id needs
 

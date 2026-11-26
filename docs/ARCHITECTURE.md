@@ -26,7 +26,7 @@ Every file in this table is a module in `src/`, except the test harness, which i
 | `api_to_terraform.py` | The path 2 entry point (F8.9): the run order, the arguments, and the exit codes, and the join applied in run order through the one join rule | the run order is stated here and nowhere else, because `api_requests.py` states no read order and `provenance.py` rule 6 states no read rule for a path 2 run: the membership responses first, in the order `api_requests.membership_lists()` names them, then the entries `api_requests.scope_index()` names, in index order, and one response is read once; the arguments and their checks are read through `panorama_to_terraform.py`, so the entry point adds no argument of its own and accepts none that names one source; it calls `generate_run`, so it states no parse order and no block builder; it prints only through the owners' console lines, writes no file outside `write_path.py`, and states no environment name |
 | `resource_mapping.py` | The verified provider contract: `EMITTED_TYPES`, `REPORT_ONLY_TYPES`, `NOT_EMITTED_TYPES`, `LOCATION_SCHEMA`, `DATA_SOURCE_SCHEMA`, `INTERFACE_RESOURCE_TYPES`, `COVERAGE_MATRIX`, and the scope tables `SCOPE_TYPES`, `SCOPE_PLACEMENT`, `SCOPE_ANSWER`, `SCOPE_LEVEL_ORDER` and `SCOPE_SHAPE` (F6.5), plus the value-to-variable table `VALUE_VARIABLES` (F6.6) | the single source of truth; no resource name or attribute from memory; `SCOPE_SHAPE` is the shape the provider takes, so a membership cannot be printed as a string where the provider takes an object; `VALUE_VARIABLES` covers every field `LOCATION_SCHEMA` declares, so the emitter and the gate read one table and no emitter branch decides the shape for one type; the row shape `tests/test_coverage_matrix.py` reads as `MATRIX_ROW_FIELDS` is the field set of a `COVERAGE_MATRIX` row, so the test reads the table through that shape and states no row fields of its own |
 | `split_device_groups.py` | Optional pre-processing: one XML file per device group | joins scopes on the device the export lists; copies with `copy.deepcopy`; states no writer, no naming rule and no console line of its own, so the fact its own row set read prints through `container_coverage.console_line` with the module's own fact phrase and block header |
-| `container_coverage.py` | The container table (§3.1), the section rule, and the one scope path definition | the table is data, so a parse method cannot exist without a row |
+| `container_coverage.py` | The container table (§3.1), the section rule, the one scope path definition, and the fact a place names, read through its own scope-walk rows | the table is data, so a parse method cannot exist without a row, and the pair between a place and the fact it names is stated once there, so no module holds a mapping of its own and a place with no scope-walk row answers the answer for a fact a unit does not state |
 | `entry_coverage.py` | The per-entry report (§3.2) | the destination is answered in one place, `EntryLedger.destination`, in this order: the per-entry fact on the recorded object, then the destination `mark` recorded, then the container table row; `mark` records a destination only when the caller states it, so a call site that states `destination='report'` for a report-only entry restates a fact the entry already holds; `name_field` is the one rule for the field that carries an entry name into a block, so the emitter, the gate, and the matrix test read the same rule |
 | `shadow_coverage.py` | The cross-source shadow scan (§3.2): a child entry name that repeats a parent entry name | the key is `state_coverage.ownership_key` read with the facts the parent row declares, so one key names one parent entry; the scan compares the matrix row and entry name part of the key; both sources are read with the same row rule, so no second naming rule exists |
 | `state_input.py` | The state producer (F5.6): a Terraform state document read as a reference source, through the same door | the two byte checks run on the state bytes, and only the parse step is chosen by the kind, so a `<!DOCTYPE` inside a JSON value is not a refusal; a document the identity key cannot read is an input refusal; the state source writes no output, so no `.tf` byte changes |
@@ -1634,13 +1634,16 @@ The gate reads these blocks with the same reader (§4.6). Pinned by
 
 An `import` block binds a resource block to the object the live config already has, so the first plan
 for a unit reads `N to import, 0 to add, 0 to change, 0 to destroy` for the entries the parse models.
-The shape is opt-in and off by default: a run that declares no `--import-blocks` writes no import file
-and the same `.tf` bytes as before, so both golden sets stay byte-identical. This is the §4.7 precedent.
+The shape is opt-in and off by default: a run that declares no pair writes no import file and the same
+`.tf` bytes as before, so both golden sets stay byte-identical. This is the §4.7 precedent. A pair is one scope
+path and one value of the mode, joined by `=`, and the argument names one pair per declared scope, sorted by the
+place it names, so no answer depends on the order the pairs were declared. The values are data in
+`import_blocks.MODE_VALUES`, and the rule that reads a pair as a unit is `unit_manifest.py` rule 6.
 
-The file is `imports.tf`, one file per unit inside the directory the manifest row names (§14), one block per
-entry the run declares, written only when
-the run declares the shape and has a block to write. A `.tf` file is the choice, because the block rules
-read `.tf` files and the data rule reads the four data files (§4.5); `imports.tf` is read by the block rule.
+The file is `imports.tf`, one file per unit inside the directory the manifest row names (§14), one block per entry
+of a unit the declaration marks, written only when the run marks that unit and has a block to write. A `.tf` file
+is the choice, because the block rules read `.tf` files and the data rule reads the four data files (§4.5);
+`imports.tf` is read by the block rule.
 
 One block per entry:
 

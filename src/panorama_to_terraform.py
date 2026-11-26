@@ -7218,11 +7218,20 @@ def shared_arguments(parser: argparse.ArgumentParser) -> None:
         f"Repeatable, or a comma-separated list. A name that no scope in this run declares "
         f"becomes a data block in {TerraformGenerator.READ_THROUGH_FILE} (F5.5)",
     )
+    # Epic 14 decision 3 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26): the declaration is one pair per scope the
+    # operator names, so the argument is held here and states no rule an owner states. The shape is read through the
+    # one scope path definition, the place through the one place-to-fact pair, and the two values through their owner.
+    # The pairs are sorted by the scope name, so no answer depends on the order the operator declared them, which is
+    # the determinism rule (§6). The flag `--import-blocks` is removed: the value that writes blocks is the value the
+    # rule in `unit_manifest.py` answers through its own row.
     parser.add_argument(
-        "--import-blocks",
-        action="store_true",
-        help=f"write one import block per entry the run declares, in {import_blocks.IMPORT_FILE}. "
-        "The id is base64 of the location object and the entry name (F6.4)",
+        "--import-mode",
+        action="append",
+        metavar="SCOPE=MODE",
+        help=f"one pair, as a scope path and a value of the mode ({', '.join(import_blocks.MODE_VALUES)}), "
+        f"joined by '='. Repeatable. A unit declared {import_blocks.MODE_VALUES[0]} writes its blocks in "
+        f"{import_blocks.IMPORT_FILE}; a unit declared {import_blocks.MODE_VALUES[1]} writes none, and a run "
+        "that declares no pair writes no block and states the empty answer on every row",
     )
     parser.add_argument(
         "--state",
@@ -7316,6 +7325,51 @@ def data_scopes(parser: argparse.ArgumentParser, args) -> list:
     return scopes
 
 
+def import_modes(parser: argparse.ArgumentParser, args) -> list:
+    """Decision 3 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26): the declaration pairs are checked before the run,
+    stated once for both entry points, following the argument rules `--data-blocks` and `--selection` state.
+
+    This states no rule an owner states: the value set is read through `import_blocks.MODE_VALUES`, the shape through
+    the one scope path definition, and the pair-to-unit mapping through `unit_manifest.pair_parts`, the rule owner
+    decision 3 names. A pair that is not one path and one value joined by `=`, a value outside the pair, a scope the
+    one definition refuses, a place that names no fact, and a pair that names the place only are argument errors, so
+    they exit 2 and write no file, the same shape `--selection` states. The pairs are sorted by the scope name, so no
+    answer depends on the order the operator declared them. Only two modes for one unit is an input refusal, and that
+    is the row owner's rule, read inside the run, so it exits 1.
+    """
+    declared = sorted({pair for pair in (args.import_mode or []) if pair})
+    if args.import_mode and not declared:
+        parser.error("--import-mode needs at least one pair")
+    pairs = []
+    for pair in declared:
+        path, sep, value = pair.partition("=")
+        if not sep:
+            parser.error(f"--import-mode pair {pair!r} is not a scope path and a value joined by '='")
+        if value not in import_blocks.MODE_VALUES:
+            parser.error(
+                f"--import-mode pair {pair!r} states a value outside the pair ({', '.join(import_blocks.MODE_VALUES)})"
+            )
+        if not container_coverage.is_scope_path(path):
+            parser.error(
+                f"--import-mode pair {pair!r} must name a scope path, read through the one scope path definition "
+                f"({', '.join(sorted(container_coverage.SCOPE_PATH_ROOTS))})"
+            )
+        key, name = unit_manifest.pair_parts(path)
+        if key is None:
+            parser.error(
+                f"--import-mode pair {pair!r} names no unit: the place it names is "
+                f"{container_coverage.path_place(path)}, which names no fact, so no unit rule answers a unit for it"
+            )
+        if not name:
+            parser.error(
+                f"--import-mode pair {pair!r} names no unit: the pair names the place only, so no entry name "
+                "answers the fact the place names"
+            )
+        # The pair is held as (path, value), so the rule owner reads it without stating the `=` shape.
+        pairs.append((path, value))
+    return pairs
+
+
 def part_for(source, request, parser=None) -> entry_coverage.RunPart:
     """One part: the source the door returned, the request that read it, and the parser that reads it.
 
@@ -7326,14 +7380,17 @@ def part_for(source, request, parser=None) -> entry_coverage.RunPart:
     return entry_coverage.RunPart(source, request, parser or PanoramaParser(source))
 
 
-def generate_run(run, view, scopes: list, index=None, parent=None, state_source=None, entry_point: str = "") -> int:
+def generate_run(
+    run, view, scopes: list, modes: list, index=None, parent=None, state_source=None, entry_point: str = ""
+) -> int:
     """The run sequence (criterion 3), stated once and called by both entry points: the parse order, the
     run-order join, the writes, the gate call, the console prints, and the exit code.
 
     `view` is the run view the entry point built: the parts it read, in the order it read them, and the join
     the entry point supplies. `entry_point` is the fact only the entry point can state: which entry point wrote
     the codebase. `index` is the scope index the entry point built, and path 1 passes none because it read no
-    request (criterion 6). `parent` and `state_source` are the reference sources the run read.
+    request (criterion 6). `parent` and `state_source` are the reference sources the run read. `modes` is the
+    declaration the argument rule checked, in the order it sorted them.
 
     The order this function reads the parts in is the order the entry point read them in, and it is the order
     the record file the run wrote states.
@@ -7389,6 +7446,24 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
             print(f"  - {len(count)} {label}")
 
     print(f"\nGenerating Terraform configuration in {run.output_dir}...")
+
+    # Epic 11 Piece 11C.1 (`docs/MULTI_RUN_CODEBASE.md` §4 rule 1): the records the codebase already holds are a
+    # reference source, read as data. This is the read half of that step, and it runs before the emitters write any
+    # file, because decision 3 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26) refuses a run that states two modes for
+    # one unit before it writes a file. The merge half stays after the emitters, because the run's own rows are the
+    # values the emitters printed. The file set, the path, and each row shape are read through their owners, so this
+    # step states no key, shape, reader, path rule, unit rule or list of record names of its own. A run that reads
+    # nothing reads no rows, so a single run writes the bytes it writes today.
+    held = {}
+    for name, module in sanity_checks.DATA_FILES:
+        path = write_path.root_path(run.output_dir, name)
+        held[module] = module.parse_rows(path.read_text(encoding="utf-8")) if path.is_file() else []
+
+    # Decision 3 rule 6, read through the row owner: the pair is read through `pair_parts`, and the units the run
+    # built are read through `units`, so a pair cannot disagree with the record for a unit the run built
+    # (`codebase_state.py` rule 2 answers that row as the run's own row).
+    unit_manifest.check_declared_modes(modes, held[unit_manifest], view)
+
     tf_gen = TerraformGenerator(run.output_dir, results["associations"], data_scopes=scopes, ledger=view)
 
     # F4.4: the property scan measures which keys an output reads from a captured object, so the record
@@ -7524,7 +7599,7 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
     # names `name_ref` recorded at the sites that applied the rule. The rows are built before the report,
     # because a cycle finding reads its grouping facts through the manifest row.
     run_rows = {
-        unit_manifest: unit_manifest.build_rows(view, tf_gen.unit_references(), tf_gen.sanitize_name),
+        unit_manifest: unit_manifest.build_rows(view, tf_gen.unit_references(), tf_gen.sanitize_name, modes),
         ownership: ownership_rows,
         reference_edges: edge_rows,
         # The run's own site rows are built after the emitters printed, because the declaration set is the site
@@ -7532,19 +7607,17 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
         # rows for that record and the run adds none to them.
         site_data: [],
     }
-    # Epic 11 Piece 11C.1 (`docs/MULTI_RUN_CODEBASE.md` §4 rule 1): the records the codebase already holds are a
-    # reference source, read as data. The entry point owns the read; the file set, the path, each row shape, the
-    # merge, the unit set and the order are read through their owners, so this step states no rule of its own and
-    # the run gains only the fields `parse_rows` reads back. A run that reads nothing merges into the rows it built,
-    # so a single run writes the bytes it writes today. The rows it read are not a door source, so `SOURCE.txt` names
-    # no record for them, and the run writes the rows it built rather than the merged set
-    # (`docs/MULTI_RUN_CODEBASE.md` §6 rule 2).
+    # The merge half of the read step, after the emitters, because the run's own rows are the values the emitters
+    # printed. The join key and the combination are read through `codebase_state`, each row shape through its owner,
+    # and the rows read above came through each module's `parse_rows`, so this step states no key, shape, reader, path
+    # rule, unit rule or list of record names of its own, and the run gains no field. A run that read nothing merges
+    # into the rows it built, so a single run writes the bytes it writes today. The rows it read are not a door
+    # source, so `SOURCE.txt` names no record for them, and the run writes the rows it built rather than the merged
+    # set (`docs/MULTI_RUN_CODEBASE.md` §6 rule 2).
     reference = {}
-    for name, module in sanity_checks.DATA_FILES:
-        path = write_path.root_path(run.output_dir, name)
-        held = module.parse_rows(path.read_text(encoding="utf-8")) if path.is_file() else []
+    for _name, module in sanity_checks.DATA_FILES:
         record = [entry for entry in codebase_state.JOIN_KEYS if entry[0] is module][0]
-        reference[module] = codebase_state.merge_rows(record, held, run_rows[module])
+        reference[module] = codebase_state.merge_rows(record, held[module], run_rows[module])
 
     # The order rule and the acyclic rule read the merged set, because `rank`, `after` and a cycle are facts about
     # the codebase and not about a run, and every fact they read is a field `parse_rows` reads back. The ownership
@@ -7644,21 +7717,22 @@ def generate_run(run, view, scopes: list, index=None, parent=None, state_source=
             )
 
     # F6.4: the import blocks. A `.tf` file, because the gate rule that checks an import block reads the
-    # files the operator receives, and written only when the run declares them and has rows that state an
-    # id. A row that states a rule instead of an id writes no block.
+    # files the operator receives, and written only for a unit the declaration names the block value for, and
+    # only when it has rows that state an id. A row that states a rule instead of an id writes no block.
     import_rows = [row for row in tf_gen.import_rows if row["import_id"]]
-    if run.import_blocks and import_rows:
-        # F6.10.3: `imports.tf` is a `.tf` file, so it is the unit's file and the run writes one per unit
-        # that has a block. `render` prints rows in unit order, so a unit's blocks print in the same order
-        # the run read them.
-        for facts in tf_gen.unit_set():
-            directory = tf_gen.directory_of(facts)
-            unit_rows = [row for row in import_rows if row["unit"] == directory]
-            if unit_rows:
-                write_path.write_file(
-                    write_path.unit_path(run.output_dir, directory, import_blocks.IMPORT_FILE),
-                    import_blocks.render(unit_rows),
-                )
+    for facts in tf_gen.unit_set():
+        directory = tf_gen.directory_of(facts)
+        unit_rows = [row for row in import_rows if row["unit"] == directory]
+        # Decision 3, answer 4: the answer for which value writes blocks is read through the row owner, so this
+        # step names no value of the pair.
+        if unit_rows and unit_manifest.unit_writes_blocks(manifest_rows, facts):
+            # F6.10.3: `imports.tf` is a `.tf` file, so it is the unit's file and the run writes one per unit
+            # that has a block. `render` prints rows in unit order, so a unit's blocks print in the same order
+            # the run read them.
+            write_path.write_file(
+                write_path.unit_path(run.output_dir, directory, import_blocks.IMPORT_FILE),
+                import_blocks.render(unit_rows),
+            )
 
     # F6.7: the commit actions. One block per unit the manifest names, written as the last `.tf` file so
     # the gate rule reads the action against the completed unit, and only when it has content.
@@ -7839,6 +7913,10 @@ def main():
     shared_checks(parser, args)
 
     scopes = data_scopes(parser, args)
+    # Decision 3 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26): the declaration pair rule is stated once, next to
+    # the argument rule `--data-blocks` states, so both entry points read one rule. A pair shape error exits 2 here;
+    # the two-mode conflict is the row owner's rule and is read inside the run.
+    modes = import_modes(parser, args)
 
     # One part per source the run read, with the request that read it, so the record can name the identity.
     # A file run has no request, so the two api fields stay `-`. F5.4 adds the parent request, so the record
@@ -7907,6 +7985,7 @@ def main():
             args,
             entry_coverage.RunView(parts, join_results),
             scopes,
+            modes,
             entry_point=ENTRY_POINT,
             parent=parent,
             state_source=state_source,

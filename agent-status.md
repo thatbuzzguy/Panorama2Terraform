@@ -1,81 +1,107 @@
 # Agent Status
 
-## Current position (main, Piece 14A.2, the mode as a manifest row field, 2026-11-25)
+## Current position (main, Piece 14A.3, the declaration argument, 2026-11-26)
 
-Piece 14A.2 is complete on main, 2026-11-25, and is not pushed. Decision 2 of `docs/IMPORT_BINDING.md` §2 is taken
-by the operator on 2026-11-25: the mode is a field of the unit-manifest row, read through `unit_manifest.parse_rows`,
-merged through `codebase_state.py` rule 2, and read by the `data_files` gate rule. One goal: record the decision as
-taken, land the field as data in the owner the decision names, and add the pins that read it as data through that
-owner. Decision 3 is untaken, so this piece states no CLI argument and no flag, and no run marks a mode. The previous
-piece, Piece 14A.1, is committed, so its record lives in the git history. The baseline this piece starts from is that
-piece's measurement: 1,861 passed and the same 4 `tflint` skips, so 1,865 pins in 55 test modules. The writing rules
-are in their owner document `docs/WRITING_RULES.md`, so this file keeps the status and the links and states no writing
-rule of its own.
+Piece 14A.3 is complete on main, 2026-11-26, and is not pushed, on top of Piece 14A.2, whose record lives in the git
+history. Decision 3 of `docs/IMPORT_BINDING.md` §2 is taken by the operator on 2026-11-26: the declaration names units
+through `scope=mode` pairs, sorted by the place each pair names, so no answer depends on the order they were declared;
+the argument is `--import-mode` and is held by the CLI; a declaration that disagrees with the mode a record row already
+states for the same unit is refused before any write, exits 1, and prints the input-refusal line; and `--import-blocks`
+is removed, with no path kept for it, so a unit marked with the value that writes blocks writes its `imports.tf` blocks
+and every other row states `unit_manifest.EMPTY_ANSWER`, which is the answer the default run prints on every row. The
+writing rules are in their owner document `docs/WRITING_RULES.md`, so this file keeps the status and the links and
+states no writing rule of its own. The baseline this piece started from was Piece 14A.2's measurement: 1,868 pins in
+55 test modules.
 
-- Placement, and the reason: `src/unit_manifest.py` is the owner decision 2 names, so `mode` enters `FIELD_ORDER`
-  after `unit`. `MODE_LEVEL` names the unit as the level the values apply to, and `unit` is the field that states that
-  level on the row, so the mode prints next to it. The two halves sit in two owners, and the reason: the pair is
-  decision 1's data and stays in `import_blocks.MODE_VALUES`, so `unit_manifest.py` reads the pair through that owner
-  instead of naming the values a second time, and `import_blocks.py` states no field name and defines no reader, so it
-  cannot trip the pins that hold it as data. `parse_rows` refuses a mode that is not a value of the pair or the empty
-  answer, and the gate reports that refusal as its finding 1 through `unit_manifest`, so the gate states no value set.
-  `src/codebase_state.py` changed no code: rule 2 takes the whole row through the reader its owner states, so the
-  merge carries the field with no key, shape or reader of its own.
-- The empty answer is stated once, in `src/unit_manifest.py` as `EMPTY_ANSWER`, in the style of `provenance.py`
-  rule 1, which prints `-` for a field that does not apply. Inside a JSON row the same answer is the empty string, and
-  `build_rows` already writes it for a field the unit does not state, so the writer reads the field from that one
-  definition. `tests/conftest.py` holds the pair as one definition that reads through its owner, because four test
-  modules read it: `tests/test_import_blocks.py` group 8, `tests/test_unit_manifest.py`, `tests/test_data_file_gate.py`
-  and `tests/test_codebase_state.py`. The empty answer is read through `unit_manifest`, its owner, so the harness holds
-  no copy of it.
-- The pins. Three are added and one is renamed.
-  `tests/test_unit_manifest.py::test_the_mode_field_reads_back_as_a_value_of_the_pair_through_its_owner` reads a mode
-  as data by planting the row through `render` and reading it back through `parse_rows`.
-  `tests/test_data_file_gate.py::test_a_mode_that_is_not_a_value_of_the_pair_is_a_finding_through_the_reader` reads the
-  gate's answer for a mode outside the pair, and reads the data rule's source for the names it does not state.
-  `tests/test_codebase_state.py::test_the_merge_carries_the_mode_as_the_record_states_it` reads the merged row through
-  the record's own reader, so it builds no row, and
-  `tests/test_codebase_state.py::test_the_module_states_no_rule_an_owner_states_and_writes_no_file` gained the check
-  that the module names no field and states no value set. One pin in `tests/test_import_blocks.py` group 8 is renamed,
-  because it read that no shape names a field for the mode and contradicted decision 2: it is
-  `test_the_field_name_and_the_pair_are_each_stated_once_in_their_owner`, and it reads each shape through the module
-  that owns it. Four pins that state the row shape as a list moved in the same commit:
-  `tests/test_unit_manifest.py::test_the_row_fields_are_the_declared_shape_in_order`,
-  `::test_the_row_states_placement_through_the_fact_keys_it_already_reads`,
-  `::test_a_row_that_is_not_the_declared_shape_is_refused`, and the row builder
-  `tests/test_data_file_gate.py::_manifest_row`, which reads the shape through its module and so could not break. The
-  pins that read a record as data through its own module read the shape and state no list, so they did not move.
-- Documents that state the row shape moved in the same commit: `docs/IMPORT_BINDING.md` §1 fact 11 and §2 decision 2,
-  `docs/ARCHITECTURE.md` §3.4, `docs/CODEBASE_ASSEMBLY.md` §3 rule 4, the `docs/README.md` index line for Epic 14,
-  `docs/USAGE_GUIDE.md` §The unit manifest, and rule 7 of `src/import_blocks.py`.
-- Gate, measured 2026-11-25 single-threaded on the tree that holds this work, in one process: `ruff check .` clean at
+- Placement, and the reason. The rule owner is `src/unit_manifest.py` rule 6, the owner decision 2 names, and the rule
+  is stated through one function call per fact: `pair_parts` reads the pair through the one scope-path definition,
+  `declared_mode` answers a unit's mode through `units` and `fact` and `EMPTY_ANSWER`, `check_declared_modes` holds the
+  agreement half, and `unit_writes_blocks` answers the write step through `MODE_VALUES` read positionally, because the
+  pin that holds the row owner forbids a quoted pair value in that module (`test_a_row_value_that_is_not_a_key_is_refused`).
+  `tests/test_write_path.py` forbids a `def write*` line in a record module, so the write answer cannot be a writer.
+  The place-to-fact pair is stated once in `src/container_coverage.py` as rule 4, read through that module's own
+  scope-walk rows, and `tests/test_container_coverage.py::test_the_fact_a_place_names_is_read_through_the_one_mapping`
+  holds it as an `ast` scan for a dict literal whose keys are all places, so no module can hold a second mapping:
+  `src/entry_coverage.py` `REPORT_SCOPE_KEYS` now builds through `fact_of_place` instead of holding its own literal.
+  The three tables that pair a place word with a fact key for a name rather than for a scope path
+  (`resource_mapping.SCOPE_ANSWER`, `state_coverage.STATE_SCOPE_KEYS`, and the `split_device_groups.py` dict) have keys
+  that are not all places, so the pin cannot hold them; that is recorded in `backlog.md`.
+  The argument is held by the CLI inside `shared_arguments` and read through `import_modes`, because the shared-shape
+  pins (`test_no_module_states_the_shape_an_owner_states`, `test_the_module_states_no_rule_an_owner_states`) hold the
+  shape rule in `container_coverage.py`, so the call sits with the CLI and not inside a rule owner. `import_blocks.py`
+  states no field name, no reader and no mode rule, following decision 1.
+  The half of the read step that reads the reference records moved before the emitters, so the agreement check runs
+  before the first write and a refused run writes no file; the merge half stays after them, which is where the write
+  boundary puts the record.
+  Two pairs that name one unit inside one declaration are refused, because the merged answer for a built unit is the
+  declared mode, so the agreement rule needs no second rule for the same fact. Only a row that states a value can
+  disagree, so a record row that states `EMPTY_ANSWER` agrees with every declaration.
+- The pins: 10 added, 3 renamed, and the pins that read the removed flag moved in the same commit.
+  `tests/test_container_coverage.py` gained `test_the_fact_a_place_names_is_read_through_the_one_mapping`.
+  `tests/test_unit_manifest.py` gained group 10 with eight pins: the pair names the units inside the scope through the
+  one unit rule, the pairs are sorted, the row prints the value for a named unit and the empty answer for one it does
+  not, two values for one unit are refused, a declared value that disagrees with the record is refused, a pair that
+  names no unit is an argument error, the argument is held by the CLI and the rule owner states no flag of its own, and
+  the write step reads the mode through the row owner and names no value.
+  `tests/test_import_blocks.py` gained
+  `test_a_unit_declared_the_block_value_writes_blocks_and_a_unit_declared_the_other_value_writes_none` in its group 9,
+  its group 7 help pin is now `test_the_declaration_appears_in_help_and_a_run_that_declares_nothing_writes_no_block`,
+  and its group 6 pin that compares the goldens is
+  `test_a_run_that_declares_no_pair_writes_the_golden_bytes`, which is the no-change rule for the removed flag.
+  `tests/test_api_path.py::test_the_entry_point_accepts_the_arguments_of_one_run_and_refuses_the_ones_that_name_one_source`
+  reads the new argument name as a data argument. Three test modules build a declaration, so the pair builder and the shape live
+  once in `tests/conftest.py` (`DECLARATION_ARGUMENT`, `PAIR_JOIN`, `pair_for`, `pair_text`, `declaration_pairs`,
+  `declaration_args`), which reads the values and the shape through their owners, and the corpus pin
+  `tests/test_site_data.py::test_the_corpus_trips_neither_rule` runs twice, once for each answer, so it reads the pair
+  through the harness. Pins that need blocks written now build the declaration instead of passing the removed flag.
+  `tests/test_codebase_state.py` and `tests/test_write_path.py` needed no change, because they read the mode through
+  the reader and the row shape.
+  Measured on one pair over `tests/fixtures/report_grouping.xml`: exit 0, 3 rows state the value, 8 state the empty
+  answer, and `imports.tf` is written inside 2 of the 3 unit directories those rows name; the third writes no file
+  because the run wrote nothing inside it, which is the content rule. A sorted declaration and the same declaration in
+  reverse order write the same bytes. A pair that names a place only, a place the shape rule refuses, a value outside
+  the pair, and a pair with no `=` each exit 2 with no output directory; two values for one unit exit 1 with no
+  directory; a declared value that disagrees with the record exits 1 and names the unit and the two values.
+- Documents that moved in the same commit: `docs/IMPORT_BINDING.md` §1 facts 1 and 5 and §2 decision 3 as taken,
+  `docs/CODEBASE_ASSEMBLY.md` §7 rules 1 and 2, §9 rule 3 and the pin names §7 rule 1 claims, `docs/ARCHITECTURE.md`
+  §1 row for `container_coverage.py` and §4.8, `docs/USAGE_GUIDE.md` argument table, Import blocks section, path 2
+  argument list and the `imports.tf` row, `docs/README.md` index lines for `container_coverage.py` and Epic 14,
+  `README.md` quick-start example, file inventory, output shape line, and the test-set entries for
+  `tests/test_unit_manifest.py`, `tests/test_import_blocks.py` and `tests/test_container_coverage.py`, plus rule 7 of
+  `src/import_blocks.py` and the wording of `sanity_checks.check_import_blocks`, which now reports the rule-type
+  findings only for blocks the reader actually read.
+- Gate, measured 2026-11-26 single-threaded on the tree that holds this work, in one process: `ruff check .` clean at
   `py310` with the 120-character line length, `ruff format --check .` clean on the same 113 files,
   `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest -p no:cacheprovider` with no parallel
-  plugin exits 0 with 1,864 passed and the same 4 `tflint` skips, so 1,868 pins in 55 test modules, in 259.42 s. The
-  pin count moved from 1,865 to 1,868: one pin each in `tests/test_unit_manifest.py` (44),
-  `tests/test_data_file_gate.py` (31) and `tests/test_codebase_state.py` (14); `tests/test_import_blocks.py` stayed at
-  37, because one of its pins is renamed and not added. The test module count stayed 55 and the format file count
-  stayed 113. `tflint` is absent on this machine, so the four skips are the four `tflint` pins in
-  `tests/test_sanity_gate.py`, and `terraform` is present, so the provider-schema pins ran. No committed golden byte
-  moves: `tests/golden` holds no data file and only 87 `.tf` files, and the pins that compare the goldens read `.tf`
-  bytes. Run times on this machine move between runs, so each figure here is one measurement.
-- Document review: the finding fact 11 answered is closed, because fact 11 now names the pins it means and states that
-  no committed data file exists. The open process-debt items in `backlog.md` are unchanged by this piece, and this
-  piece opened no new finding.
+  plugin exits 0 with 1,874 passed and the same 4 `tflint` skips, so 1,878 pins in 55 test modules, in 271.69 s. The
+  pin count moved from 1,868 to 1,878: eight in `tests/test_unit_manifest.py` (51), one in
+  `tests/test_container_coverage.py` (29), one in `tests/test_import_blocks.py` (37); `tests/test_api_path.py` (42) and
+  `tests/test_site_data.py` (33) stayed, because their pins moved and none was added. The test module count stayed 55
+  and the format file count stayed 113. `tflint` is absent on this machine, so the four skips are the four `tflint`
+  pins in `tests/test_sanity_gate.py`, and `terraform` is present at 1.16.2, so the provider-schema pins ran. No
+  committed golden byte moves: `tests/golden` holds no data file and only 87 `.tf` files, none named `imports.tf`, and
+  the pins that compare the goldens read `.tf` bytes for a run that declares no pair. Run times on this machine move
+  between runs, so each figure here is one measurement.
+- Document review: every name a document claims exists, read through `tools/check_documents.py` check 1 over `README.md`,
+  `docs/`, `src/`, and the tracking files, and the same scan extended to the `::name` claims that follow a full claim.
+  The open process-debt items in `backlog.md` are unchanged by this piece apart from the one entry this piece replaced
+  with the measurement of the three tables the new mapping pin cannot hold.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
 `commit.md`, `README.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/IMPORT_BINDING.md`,
-`docs/ARCHITECTURE.md` §1, §3.3, §3.4, §4.6, §5, §6, `docs/CODEBASE_ASSEMBLY.md` §3, §7, §9, §11, §14,
-`docs/MULTI_RUN_CODEBASE.md` §2 to §6, `docs/USAGE_GUIDE.md` §The unit manifest, `tools/check_documents.py`,
-`src/unit_manifest.py`, `src/import_blocks.py`, `src/codebase_state.py`, `src/provenance.py`, `src/sanity_checks.py`,
-`tests/conftest.py`, `tests/test_unit_manifest.py`, `tests/test_data_file_gate.py`, `tests/test_codebase_state.py`,
-`tests/test_import_blocks.py`, `tests/test_round_trip.py`, `tests/test_layout.py`.
+`docs/ARCHITECTURE.md` §1, §3.2, §4.6, §4.8, §6, `docs/CODEBASE_ASSEMBLY.md` §7, §9, §14,
+`docs/USAGE_GUIDE.md`, `tools/check_documents.py`, `src/container_coverage.py`, `src/entry_coverage.py`,
+`src/import_blocks.py`, `src/unit_manifest.py`, `src/codebase_state.py`, `src/sanity_checks.py`,
+`src/panorama_to_terraform.py`, `src/api_to_terraform.py`, `src/shared_checks.py`, `src/state_input.py`,
+`tests/conftest.py`, `tests/test_container_coverage.py`, `tests/test_unit_manifest.py`,
+`tests/test_import_blocks.py`, `tests/test_api_path.py`, `tests/test_site_data.py`, `tests/test_codebase_state.py`,
+`tests/test_write_path.py`, `tests/test_data_file_gate.py`, `tests/test_layout.py`, `tests/test_coverage_matrix.py`,
+`tests/test_reference_edges.py`.
 
-The next piece: Piece 14A.3, the declaration argument, is blocked on decision 3, which is also the decision that an
-order-dependent declaration is refused. Piece 14A.4, the report section, needs a report rule that names the units a
-run marked, so it cannot be written from decision 2 alone. The two open process-debt pieces, the gate and CI document
-and the watch list document, are in `to-do.md` and `backlog.md`. Decision 2 is taken, so the field is landed; decision
-3, the declaration rule, is the next decision to take.
+The next piece: Piece 14A.4, the report section that names the units a run marked, needs decision 4, the whole-block
+fact's name, owner and severity, which is the next decision to take. Decisions 5 to 9 are untaken, so the completeness
+half, the device fact, the four `*_policy_rules` types, the read-through order, and permanence stay in the record. The
+two open process-debt pieces, the gate and CI document and the watch list document, are in `to-do.md` and `backlog.md`.
 
 ## Rules to keep when writing documents
 
@@ -127,8 +153,8 @@ This file keeps the status and the links and states no writing rule of its own.
   shadow, so the report line names which parent entry the child repeats, and the parent entry stays in the
   report, because the console shape names one identity.
 - The console line shape is stated in one place, `container_coverage.console_line` (`docs/ARCHITECTURE.md`
-  §3.2), so a scan states its fact phrase and its block header and calls it. A finding kind that prints on
-  the console must fit the four parts: one position, one identity, one fact. A source named on a console
+  §3.2), so a scan states its fact phrase and its block header and calls it. A finding kind that prints on the
+  console must fit the four parts: one position, one identity, one fact. A source named on a console
   line is the source name, never the path, and a fact that compares two entries or two units prints in the
   report only. The five kinds that print are the container coverage finding, the gap entry, the property
   finding, the shadow line, and the splitter line, which names the fact its own row set read.
@@ -136,8 +162,8 @@ This file keeps the status and the links and states no writing rule of its own.
   `gap_fact` print the same words for the same finding. `PRINTS_VALUE_KINDS` names which kinds print a value, and
   it must stay data: no writer branch may decide the shape per kind. `NAMES_NO_FIELD_KINDS` is the matching data set
   for the kinds that name no field, so a `bookkeeping` row states the row identity only, because the fact its row
-  records is the relation the entry carries no value for. A row that prints a value must carry the captured
-  object through `row_for`, because `fields` holds the names only, and the value shape is
+  records is the relation the entry carries no value for. A row that prints a value must carry the captured object
+  through `row_for`, because `fields` holds the names only, and the value shape is
   `report_value`. A read through the recorded object is what the property scan counts, so a rule that prints a
   value is a rule about a read, and the pin that holds it must run the pipeline, not build a row by hand. A kind
   that names field names must name only fields a read reaches: for a `nested-block` row the print is the only
@@ -351,8 +377,8 @@ The measurements taken 2026-11-22, single-threaded, in `/tmp/opencode`:
 
 The two decisions, taken 2026-11-22: the floor is `>= 1.16` with CI at 1.16.7, so no statement in the documents
 reaches past what was measured, and the Terraform minimum gets one owner the way the provider version has one. The
-pieces are 12A.1 to 12A.3 in `to-do.md`. The gate baseline this task starts from is the Piece 11C.1 measurement in
-the Current position above; the measurements below were taken on the tree before Piece 11C.1 landed.
+pieces are 12A.1 to 12A.3 in `to-do.md`. The gate baseline this task starts from is the Piece 11C.1 measurement in the
+Current position above; the measurements below were taken on the tree before Piece 11C.1 landed.
 
 ## Position in the `import-pairing` worktree (Epic 14 planning, 2026-11-23)
 

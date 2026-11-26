@@ -147,6 +147,10 @@ def run(argv, producer=None) -> int:
         parser.error("--host is needed: the request set is the scope set, and a request names no host without one")
     panorama_to_terraform.shared_checks(parser, args)
     scopes = panorama_to_terraform.data_scopes(parser, args)
+    # Decision 3 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26): the declaration pair rule is stated once in the
+    # module that holds the arguments, so the entry point states no rule of its own beyond calling it. A pair shape
+    # error exits 2 here; the two-mode conflict is the row owner's rule and is read inside the run.
+    modes = panorama_to_terraform.import_modes(parser, args)
 
     try:
         parts, index = run_order(args, producer)
@@ -162,7 +166,7 @@ def run(argv, producer=None) -> int:
 
         view = entry_coverage.RunView(parts, panorama_to_terraform.join_results)
         return panorama_to_terraform.generate_run(
-            args, view, scopes, index=index, state_source=state_source, entry_point=ENTRY_POINT
+            args, view, scopes, modes, index=index, state_source=state_source, entry_point=ENTRY_POINT
         )
 
     except Exception as e:

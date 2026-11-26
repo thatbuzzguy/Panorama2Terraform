@@ -17,11 +17,13 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
 
 ## 1. Facts measured offline
 
-1. **The binding decision is run-wide today.** The argument is one flag with no value
-   (`src/panorama_to_terraform.py`), so no part of a run can be bound while another part is not. The row
-   shape `import_blocks.IMPORT_ROW_FIELDS` states no field for the decision, so the decision reaches the
-   output only as blocks. No record states which units a run bound, so a later run cannot read the
-   decision back, and a gate rule cannot name a unit that should have written blocks.
+1. **The binding decision is per unit, because decision 3 was taken on 2026-11-26.** The argument names one pair
+   per declared scope, so a declaration names units, and the decision reaches the output twice: as the blocks for a
+   unit the declaration marks, and as the row field decision 2 names, so a later run reads the decision back through
+   `unit_manifest.parse_rows`. Before that decision the argument was one flag with no value, so no part of a run
+   could be bound while another part was not, no record stated which units a run bound, and a gate rule could not
+   name a unit that should have written blocks. The gate rule that reads a block still reads the files the run wrote,
+   and the half that names an emitted entry with no block stays decision 5's.
 
 2. **The address half is already stable, which is what makes a bound codebase readable after the first
    plan.** The §5 rule puts the identity digest in a local name, and `unit_manifest.py` rule 2 puts the
@@ -49,8 +51,9 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
 5. **A read-through name is never bound.** `sanity_checks.check_import_blocks` refuses an `import` block
    that names a `data` block, because an import names a resource. A built-in name such as `any` has no
    verified name table, so the run cannot tell a built-in from an operator object, and a built-in has no
-   object to bind to. So a run that declares a read-through scope writes blocks it cannot bind, and nothing
-   names which blocks those are.
+   object to bind to. So a run that declares a read-through scope can write blocks for a unit it marked, and
+   the record names that unit through the mode field decision 2 took; the half that compares those blocks with
+   the entries the run's ledger read is decision 5's.
 
 6. **The whole-block fact is measurable today and has no name.** A block that reads fewer properties than
    its coverage matrix row declares is a partial block, and a plan that compares a partial block with the
@@ -94,7 +97,7 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
 
 ## 2. The decisions to take
 
-Each decision names what it needs. Decisions 1 and 2 are taken, so the pieces that read them can be written; the
+Each decision names what it needs. Decisions 1, 2 and 3 are taken, so the pieces that read them can be written; the
 rest are untaken, so no piece can be written from them yet.
 
 1. **The mode values, and the level the mode sits at. Taken 2026-11-25: the mode stops at the unit.** Two
@@ -131,8 +134,9 @@ rest are untaken, so no piece can be written from them yet.
    of naming the values a second time. The answer for a unit the run did not mark is stated once, in
    `unit_manifest.py` as `EMPTY_ANSWER`, in the style of `provenance.py` rule 1, which prints `-` for a field that
    does not apply: inside a JSON row the same answer is the empty string, and `build_rows` already writes it for a
-   field the unit does not state. Decision 3 is untaken, so no argument declares a mode and every row a run writes
-   states the answer for a unit the run did not mark.
+   field the unit does not state. Decision 3 was taken on 2026-11-26, so an argument declares the mode for the units
+   it names, and every other row states the answer for a unit the run did not mark, which is the answer a run that
+   declares nothing prints on every row.
 
    The field prints after `unit`, because `MODE_LEVEL` names the unit as the level the values apply to and `unit` is
    the field that states that level on the row. Fact 11 names what moves: no committed golden byte, because no
@@ -143,14 +147,50 @@ rest are untaken, so no piece can be written from them yet.
    `tests/test_import_blocks.py::test_the_field_name_and_the_pair_are_each_stated_once_in_their_owner`, and the
    three pins fact 11 names.
 
-3. **The declaration rule.** A mode is declared by an argument that names scopes, read through
-   `container_coverage.is_scope_path` and `SCOPE_PATH_ROOTS`, the one scope-path definition, so a mode names
-   no directory and no second unit set. The argument sits with the CLI and not with the record module, which
-   is the rule the no-flag scan holds, and the rule owner states no flag of its own. A mode a run declares
-   must agree with the mode the merged record names for the same unit, so a run cannot state two modes for
-   one unit. A mode that depends on the order the entries appear in is refused by `ARCHITECTURE.md` §6, the
-   same rule that decides the archive member selection (`INPUT_SHAPES.md` §2 rule 4), so the declaration is
-   either an explicit list of scopes or a refusal.
+3. **The declaration rule. Taken 2026-11-26: the declaration names units through pairs.** Four answers, and the
+   owner each answer needs.
+
+   - **The shape is `scope=mode` pairs, one pair per declared scope**, repeatable, sorted by the name of the place
+     the pair states, so no answer depends on the order the pairs were declared. The declaration is the explicit
+     list of scopes, so no order rule is needed, and `ARCHITECTURE.md` §6, the rule that decides the archive member
+     selection (`INPUT_SHAPES.md` §2 rule 4), holds.
+   - **The name is `--import-mode`**, in the set both entry points read.
+   - **A mode a run declares must agree with the mode the merged record names for the same unit.** A run that
+     states two modes for one unit is refused before it writes any file, exits 1, and prints the input-refusal
+     line, naming the unit, the mode the record names, and the mode the run declares. The refusal is
+     `xml_input.UnsafeInputError`, so `is_refusal` keeps the two kinds it already states, following
+     `state_input.py` rule 5. A pair that is not one path and one value joined by `=`, a value outside the pair, a
+     place the one scope path definition refuses, a pair that names the place only, and a place that names no fact
+     are argument errors, so they exit 2 and write no file.
+   - **`--import-blocks` is removed, and no path stays for it.** A unit the declaration marks with the value that
+     writes blocks writes its `imports.tf` blocks, a unit marked with the other value writes none, and a run that
+     declares no pair writes no block and prints `unit_manifest.EMPTY_ANSWER` on every row, so a default run's
+     bytes are unchanged. The pins that read the old flag moved in the same commit as the decision.
+
+   The rule owner is `src/unit_manifest.py` rule 6, the owner of the `mode` field, `EMPTY_ANSWER` and `parse_rows`.
+   The pair reaches a unit through `container_coverage.fact_of_place`, the one place that states the pair between a
+   place and the fact it names, so `unit_manifest.py` holds no mapping of its own, and the unit is read through
+   `units` and `fact`: the argument states no path shape, no unit rule, no directory and no second unit set, and
+   `import_blocks.py` states no field name, no reader and no mode rule. The shape is read through
+   `container_coverage.is_scope_path` and `SCOPE_PATH_ROOTS`, the place through `path_place`, and the two values
+   through `import_blocks.MODE_VALUES`, so no module states a value of the pair a second time, and the write step
+   answers whether a unit writes blocks through `unit_manifest.unit_writes_blocks`. The argument is held by the CLI,
+   inside `shared_arguments`, and read through `import_modes`, so the rule owner states no flag of its own, which is
+   the rule the no-flag scan holds (`tests/test_write_path.py::test_no_flag_names_the_write_path`), and the owner
+   states a rule function and not an argument of its own. The half of the read step that reads the reference records
+   moves before the emitters, because the agreement check runs before the first write.
+
+   Pinned by `tests/test_container_coverage.py::test_the_fact_a_place_names_is_read_through_the_one_mapping`,
+   `tests/test_unit_manifest.py::test_the_declaration_names_the_units_inside_the_scope_through_the_one_unit_rule`,
+   `::test_the_declaration_pairs_are_sorted_by_name_so_no_answer_depends_on_the_order`,
+   `::test_a_declared_unit_prints_its_mode_and_an_undeclared_unit_prints_the_empty_answer`,
+   `::test_two_modes_for_one_unit_are_refused_and_the_run_writes_no_file`,
+   `::test_a_declared_mode_that_disagrees_with_the_record_is_refused_and_writes_no_file`,
+   `::test_a_pair_that_names_no_unit_is_an_argument_error`,
+   `::test_the_declaration_is_held_by_the_cli_and_the_rule_owner_states_no_flag_of_its_own`, and
+   `::test_the_write_step_reads_the_mode_through_the_row_owner_and_names_no_value`, plus
+   `tests/test_import_blocks.py::test_a_unit_declared_the_block_value_writes_blocks_and_a_unit_declared_the_other_value_writes_none`
+   for the unit that writes the blocks.
 
 4. **The whole-block fact needs a name, an owner, and a severity.** It compares two sets: the properties a
    matrix row declares, and the fields the emitter reads on a run. By `ARCHITECTURE.md` §4.6 a fact that

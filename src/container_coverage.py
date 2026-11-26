@@ -1,6 +1,6 @@
 """F4.2 entry coverage: the container table and the unknown-container report.
 
-Two rules, stated once here:
+Four rules, stated once here:
 
 1. The container table. One row per parse method: the container it reads and
    where its entries go. `docs/ARCHITECTURE.md` §3.1 points at this table
@@ -39,6 +39,14 @@ The console line shape is the third rule stated here, and the only place it is s
 `console_line` joins the four parts (`docs/ARCHITECTURE.md` §3.2). A scan states its own
 fact phrase and its block header and calls this function, so no module defines a second
 shape. Pinned by `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`.
+
+The fourth rule is the pair between a place and the fact it names, and this module is the only
+place that states it, because it owns both the five scope facts and the set of readable places.
+`fact_of_place` reads the pair through the scope-walk rows of its own table, so a declared scope
+path reaches a unit through this one mapping and no module holds a second mapping. A place that
+names no fact answers None, because this module states no row shape, so the answer for a field a
+row does not state stays with the module that owns that row shape. Pinned by
+`tests/test_container_coverage.py::test_the_fact_a_place_names_is_read_through_the_one_mapping`.
 """
 
 import xml.etree.ElementTree as ET
@@ -637,6 +645,24 @@ def is_scope_path(path: str) -> bool:
     if not segments or segments[0] not in SCOPE_PATH_ROOTS:
         return False
     return len(segments) == 1 or (len(segments) == 3 and segments[1] == ENTRY_SEGMENT and segments[2])
+
+
+def fact_of_place(place: str) -> str | None:
+    """The fact key the scope-walk row for `place` names (rule 4), or None for a place no row names.
+
+    The pair is read from this module's own scope-walk rows through the one fact-key set, so the table stays the one
+    place that states it and no reader holds a mapping of its own. A place with no scope-walk row names no fact, so
+    `shared` and the built-in place answer None here, and the answer for a field a row does not state stays with the
+    module that owns that row shape. Pinned by
+    `tests/test_container_coverage.py::test_the_fact_a_place_names_is_read_through_the_one_mapping`.
+    """
+    for row in CONTAINER_TABLE:
+        if row.read_via == "scope walk" and row.path == place:
+            name = row.note.split(" scope fact")[0]
+            if name in SCOPE_FACT_KEYS:
+                return name
+            return None
+    return None
 
 
 def is_predefined(container: ET.Element, parents: dict, source: ParsedSource | None = None) -> bool:

@@ -1,6 +1,6 @@
 """F4.2 entry coverage: the container table, the scan, and the report.
 
-Three groups of checks:
+Five groups of checks:
 
 1. Table <-> code. Every parse method on `PanoramaParser` has a row in
    `container_coverage.CONTAINER_TABLE`, every row names a method that exists,
@@ -23,6 +23,10 @@ Three groups of checks:
    module defines a second one, and the scans whose fact names two identities or a second
    position state no console wording at all. `docs/ARCHITECTURE.md` §3.2 states the shape once
    and points at the function.
+5. The fact a place names. The pair between a place and the fact it names is stated once, on
+   this module's own scope-walk rows, and read through `fact_of_place`, so no module holds a
+   mapping of its own and a place with no scope-walk row answers the answer for a fact a unit
+   does not state.
 
 Path matching is by segment presence: a method may reach a container through a
 helper, so a row path matches when the method, or a method it calls, names each
@@ -42,15 +46,19 @@ from pathlib import Path
 import container_coverage
 import resource_mapping
 import source_fetch
+import unit_manifest
 import xml_input
 from conftest import (
     FIXTURES_DIR,
+    MODE_VALUES,
     PREDEFINED_ENTRY_BODY,
     PREDEFINED_PLACE_BODY,
     RESPONSES_DIR,
     SRC_DIR,
     corpus_fixtures,
+    pair_for,
     per_scope_response,
+    record_rows,
     run_script,
 )
 
@@ -566,3 +574,81 @@ def test_a_finding_does_not_change_the_exit_code(tmp_path):
     assert result["proc"].returncode == 0
     sanity = (tmp_path / "SANITY_REPORT.txt").read_text(encoding="utf-8")
     assert "Result: PASS" in sanity, sanity
+
+
+# --- 5. The fact a place names ------------------------------------------------
+
+
+def test_the_fact_a_place_names_is_read_through_the_one_mapping(tmp_path):
+    """Rule 4: the pair between a place and the fact it names is stated once, on this module's own scope-walk
+    rows, and every reader reads it through `fact_of_place`, so no module holds a mapping of its own. A place with
+    no scope-walk row names no fact, so it answers None, which is the answer for a fact a unit does not state.
+
+    Measured 2026-11-26: the five scope-walk rows name `device_group`, `vsys`, `template`, `vsys_device` and
+    `template_stack`; `shared` and the built-in place have no row, so they answer None. The scan finds no dict
+    literal in `src/` that pairs a place with a fact key, and the two readers that need the pair read it through
+    this module. Content read through a run's rows through `parse_rows` on `report_grouping.xml`: 11 rows, and the
+    rows that carry a name for each fact are 5 for `device_group`, 5 for `vsys_device`, 4 for `template`, 1 for
+    `vsys` and none for `template_stack`.
+    """
+    walk_rows = [row for row in container_coverage.CONTAINER_TABLE if row.read_via == "scope walk"]
+    assert len(walk_rows) == 5, walk_rows
+    for row in walk_rows:
+        fact = container_coverage.fact_of_place(row.path)
+        assert fact in container_coverage.SCOPE_FACT_KEYS, row
+        assert row.note.split(" scope fact")[0] == fact, row
+
+    # A place with no scope-walk row names no fact, so it answers None.
+    for place in sorted(container_coverage.SCOPE_PATH_ROOTS):
+        if place not in {row.path for row in walk_rows}:
+            assert container_coverage.fact_of_place(place) is None, place
+
+    # The table is the one statement of the pair: no module holds a dict literal that pairs a place with a fact key,
+    # and the readers name this module instead of holding a mapping of their own.
+    places = set(container_coverage.SCOPE_PATH_ROOTS)
+    facts = set(container_coverage.SCOPE_FACT_KEYS)
+    for path in sorted(SRC_DIR.glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Dict):
+                continue
+            keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
+            values = [v.value for v in node.values if isinstance(v, ast.Constant)]
+            if keys and all(k in places for k in keys) and any(v in facts for v in values):
+                raise AssertionError((path.name, dict(zip(keys, values, strict=True)), "a second mapping of the pair"))
+    for name in ("container_coverage.py", "entry_coverage.py", "unit_manifest.py"):
+        text = (SRC_DIR / name).read_text(encoding="utf-8")
+        if name == "container_coverage.py":
+            assert "def fact_of_place(" in text, "the owner states the pair through its own rows"
+        else:
+            assert "container_coverage.fact_of_place(" in text, (name, "the reader reads the pair through its owner")
+
+    # Content, read through a run's rows through `parse_rows`. A fact a unit does not state answers the empty
+    # string, so a row that names no entry in a place carries the empty answer under that fact key.
+    out_dir = tmp_path / "out"
+    proc = run_script(
+        "panorama_to_terraform.py", str(FIXTURES_DIR / "report_grouping.xml"), "--output-dir", str(out_dir)
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    rows = record_rows(out_dir)[unit_manifest]
+    assert len(rows) == 11, rows
+    counts = {}
+    names = {}
+    for row in walk_rows:
+        key = container_coverage.fact_of_place(row.path)
+        values = [unit_manifest.fact(unit_manifest.facts_of(row), key) for row in rows]
+        counts[key] = sum(1 for value in values if value)
+        names[key] = sorted({value for value in values if value})
+    assert counts == {"device_group": 5, "vsys_device": 5, "template": 4, "vsys": 1, "template_stack": 0}, counts
+    assert names == {
+        "device_group": ["Datacenter-FW", "Office-FW"],
+        "vsys_device": ["fw-1.example.com", "fw-2.example.com", "localhost.localdomain"],
+        "template": ["DC-Networks", "HQ-Networks"],
+        "vsys": ["vsys2"],
+        "template_stack": [],
+    }, names
+
+    # The pair a declaration states reaches the fact through this mapping, so a pin that builds a pair reads the
+    # same pair the run reads.
+    pair = pair_for("devices", "fw-2.example.com", MODE_VALUES[0])
+    assert unit_manifest.pair_parts(pair[0]) == (container_coverage.fact_of_place("devices"), "fw-2.example.com"), pair
+    assert unit_manifest.pair_parts(pair_for("shared", "url-list", MODE_VALUES[0])[0]) == (None, "url-list")

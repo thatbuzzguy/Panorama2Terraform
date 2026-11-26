@@ -1,6 +1,6 @@
 """F6.4: import blocks, one block per entry, as `imports.tf`.
 
-Eight groups, one per rule set here:
+Nine groups, one per rule set here:
 
 1. The id encoding: base64 of the JSON object, keys sorted at every level; `decode_id` is its inverse and
    refuses a shape it does not declare.
@@ -13,11 +13,17 @@ Eight groups, one per rule set here:
    recorded. No second location rule and no second naming rule.
 6. Determinism and the no-change rule: two runs write the same bytes, and a run that declares nothing writes
    the same `.tf` bytes as before.
-7. The file shape, the reader, and the opt-in: `to` then `id`, one `.tf` file per run, `CHECK_ORDER` names
-   `import_blocks`, and `--import-blocks` is off by default.
+7. The file shape, the reader, and the declaration (`docs/IMPORT_BINDING.md` §2 decision 3, taken 2026-11-26): `to`
+   then `id`, one `.tf` file for each unit the declaration marks, `CHECK_ORDER` names `import_blocks`, and the pair
+   is read through the owners: the value set through this module and the scope shape through `container_coverage`. A
+   run that declares no pair writes no block.
 8. The mode as data, at the unit (`docs/IMPORT_BINDING.md` §2 decision 1, taken 2026-11-25): the two values and
    the level read as data through the owner, the fact that no row shape names a field for the mode, and the fact
    that the owner states no unit rule, no level rule and no mode reader of its own.
+9. The write answer for the pair, read through the row owner (decision 3): the value that writes blocks is the answer
+   `unit_manifest.unit_writes_blocks` gives for a unit's row, so this module states no write rule of its own, and the
+   pins build a declaration through `conftest.declaration_pairs`, which reads the place-to-fact pair through
+   `container_coverage`.
 
 The pinned provider fact is the object the provider docs import line for `panos_address` encodes.
 """
@@ -27,6 +33,7 @@ from pathlib import Path
 
 import pytest
 
+import container_coverage
 import entry_coverage
 import import_blocks
 import ownership
@@ -37,12 +44,15 @@ import sanity_checks
 import site_data
 import unit_manifest
 from conftest import (
+    DECLARATION_ARGUMENT,
     FIXTURES_DIR,
     GOLDEN_DIR,
     MODE_VALUES,
     SAMPLE_CONFIG,
     SRC_DIR,
     corpus_fixtures,
+    declaration_args,
+    declaration_pairs,
     file_text,
     parts,
     record_rows,
@@ -79,6 +89,18 @@ def _files(out_dir: Path) -> dict:
 def _bytes(out_dir: Path) -> dict:
     """The `.tf` bytes the run wrote, keyed by the same path the text reader keys by (F6.10.3, §14)."""
     return {key: text.encode("utf-8") for key, text in _files(out_dir).items()}
+
+
+def _declared(source: Path, out_dir: Path, value: str = MODE_VALUES[0]) -> tuple:
+    """The run the declaration pins read, as the rule reads it: the first run writes the record, and the second run
+    writes into the same output with one pair per unit that record shows, in the order the argument rule sorts them.
+    The pairs are built through `conftest.declaration_pairs`, the one place a pin builds a pair, and the record is
+    read through `conftest.record_rows`, so this module states no row shape and no place-to-fact mapping of its own.
+    Returns (the second run's result, the pairs it declared).
+    """
+    _run(source, out_dir)
+    pairs = declaration_pairs(record_rows(out_dir)[unit_manifest], value)
+    return _run(source, out_dir, declaration_args(pairs)), pairs
 
 
 def _pair(name: str, location: dict) -> str:
@@ -217,15 +239,19 @@ def test_the_rule_reads_import_blocks_with_the_one_reader():
 
 
 def test_no_false_positive_across_the_corpus(tmp_path):
-    """Every entry the corpus writes agrees with the block it names."""
+    """Every entry the corpus writes agrees with the block it names, so the pins declare the pairs the run's own
+    rows show and read the blocks the declaration writes.
+    """
     for fixture in FIXTURES:
         out = tmp_path / fixture
-        assert _run(FIXTURES_DIR / fixture, out, ("--import-blocks",)).returncode == 0
+        result, pairs = _declared(FIXTURES_DIR / fixture, out)
+        assert result.returncode == 0, (fixture, pairs)
         files = _files(out)
         if files:
             # A WARN for a rule entry is the reported decision, not a violation.
             assert [f for f in sanity_checks.check_import_blocks(files) if f.severity == sanity_checks.FAIL] == [], (
-                fixture
+                fixture,
+                pairs,
             )
 
 
@@ -243,10 +269,12 @@ def test_the_rule_set_comes_from_the_rulebase_field():
 
 
 def test_a_rule_entry_writes_no_block_and_one_warn_finding(tmp_path):
-    """The rulebase, the position, and the list of names are not facts the parse can state."""
+    """The rulebase, the position, and the list of names are not facts the parse can state, so the pins read the
+    blocks through a declaration the run's own rows show.
+    """
     out = tmp_path / "rules"
-    result = _run(FIXTURES_DIR / "kitchen_sink.xml", out, ("--import-blocks",))
-    assert result.returncode == 0
+    result, pairs = _declared(FIXTURES_DIR / "kitchen_sink.xml", out)
+    assert result.returncode == 0, (pairs, "the declaration names one pair per unit the run built")
     files = _files(out)
     text = file_text(files, IMPORTS)
     for rule_type in import_blocks.rule_types():
@@ -301,7 +329,8 @@ def test_the_file_prints_units_in_order_then_entries_in_order():
 
 def test_the_file_names_no_timestamp_and_no_path(tmp_path):
     out = tmp_path / "run"
-    assert _run(SAMPLE_CONFIG, out, ("--import-blocks",)).returncode == 0
+    result, pairs = _declared(SAMPLE_CONFIG, out)
+    assert result.returncode == 0, pairs
     text = file_text(_files(out), IMPORTS)
     assert "timestamp" not in text.lower()
     assert str(tmp_path) not in text
@@ -309,17 +338,23 @@ def test_the_file_names_no_timestamp_and_no_path(tmp_path):
 
 
 def test_two_runs_write_the_same_bytes(tmp_path):
-    """Two runs on the same input write the same bytes, including the per-unit layout (F6.10.3, §14)."""
-    first = _run(SAMPLE_CONFIG, tmp_path / "first", ("--import-blocks",))
-    second = _run(SAMPLE_CONFIG, tmp_path / "second", ("--import-blocks",))
-    assert first.returncode == 0 and second.returncode == 0
+    """Two runs on the same input write the same bytes, including the per-unit layout (F6.10.3, §14). The second run
+    declares the same pairs in the reverse order, so the bytes cannot depend on the order the pairs were declared.
+    """
+    first, pairs = _declared(SAMPLE_CONFIG, tmp_path / "first")
+    second = _run(SAMPLE_CONFIG, tmp_path / "second", declaration_args(tuple(reversed(pairs))))
+    assert first.returncode == 0 and second.returncode == 0, pairs
     assert _bytes(tmp_path / "first") == _bytes(tmp_path / "second")
 
 
-def test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes(tmp_path):
-    """The shape is opt-in, so both golden sets stay byte-identical."""
+def test_a_run_that_declares_no_pair_writes_the_golden_bytes(tmp_path):
+    """The declaration is opt-in, so both golden sets stay byte-identical: a run that declares no pair writes no
+    block, and the manifest row states the answer for a unit the run did not mark.
+    """
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
-    assert not parts(tf_files(tmp_path), IMPORTS), "a run that declares no entry writes no file"
+    assert not parts(tf_files(tmp_path), IMPORTS), "a run that declares no pair writes no file"
+    for row in record_rows(tmp_path)[unit_manifest]:
+        assert row["mode"] == unit_manifest.EMPTY_ANSWER, row
     for path in sorted((GOLDEN_DIR / "sample").rglob("*.tf")):
         # F6.10.3 (§14): the golden case holds the same per-unit layout the run writes, so the byte
         # comparison reads the path inside the case.
@@ -327,7 +362,18 @@ def test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes(tmp_path):
 
 
 def test_the_file_is_written_only_when_it_has_content(tmp_path):
-    """A run that declares the shape but declares no entry writes no file."""
+    """Rule 6: the file is written only when the run has block content for the unit. The pins build a pair from a
+    run that shows units, through `conftest.declaration_pairs`, the one place a pin builds a pair, and read it back
+    through `unit_manifest.pair_parts` and the one scope path definition, so this module holds no path shape and no
+    mapping of its own. Run on an input whose units no pair names, the row owner answers the empty answer, `render`
+    prints nothing for no row, and no file is written.
+    """
+    built = tmp_path / "built"
+    assert _run(SAMPLE_CONFIG, built).returncode == 0
+    pairs = declaration_pairs(record_rows(built)[unit_manifest], MODE_VALUES[0])
+    assert pairs, "the pins read a record that shows units"
+    assert all(container_coverage.is_scope_path(pair[0]) for pair in pairs), pairs
+
     source = tmp_path / "empty.xml"
     source.write_text(
         '<?xml version="1.0"?>\n<config version="10.0.0"><devices>'
@@ -337,12 +383,18 @@ def test_the_file_is_written_only_when_it_has_content(tmp_path):
         encoding="utf-8",
     )
     out = tmp_path / "out"
-    assert _run(source, out, ("--import-blocks",)).returncode == 0
+    assert _run(source, out, declaration_args(pairs)).returncode == 0
+    rows = record_rows(out)[unit_manifest]
+    assert rows, "the run built units, so the answer is read through a row"
+    key, name = unit_manifest.pair_parts(pairs[0][0])
+    assert not any(unit_manifest.fact(unit_manifest.facts_of(row), key) == name for row in rows), (
+        "the pair names a unit this run did not build",
+    )
     assert not parts(_files(out), IMPORTS)
     assert "import {" not in import_blocks.render([])
 
 
-# --- 7. The file shape, the reader, and the opt-in ----------------------------
+# --- 7. The file shape, the reader, and the declaration ------------------------
 
 
 def test_a_block_states_to_then_id():
@@ -369,9 +421,11 @@ def test_the_one_reader_reads_both_block_shapes_in_one_pass():
 
 
 def test_the_import_file_is_a_gate_input(tmp_path):
-    """Decision 1 rule 1: the agreement rule reads `.tf` files only, so the shape is a `.tf` file."""
+    """Decision 1 rule 1: the agreement rule reads `.tf` files only, so the shape is a `.tf` file, and rule 6 of
+    `unit_manifest.py` decides which unit's directory holds it."""
     out = tmp_path / "run"
-    assert _run(SAMPLE_CONFIG, out, ("--import-blocks",)).returncode == 0
+    result, pairs = _declared(SAMPLE_CONFIG, out)
+    assert result.returncode == 0, pairs
     assert parts(sanity_checks.read_tf_files(out), import_blocks.IMPORT_FILE), (
         "the gate reads the file through the unit directory"
     )
@@ -379,11 +433,14 @@ def test_the_import_file_is_a_gate_input(tmp_path):
     assert "import_blocks" in (out / "SANITY_REPORT.txt").read_text()
 
 
-def test_the_opt_in_appears_in_help_and_defaults_off(tmp_path):
-    """Decision 1 rule 2: the shape is opt-in, following the `--data-blocks` precedent."""
-    assert "--import-blocks" in run_script(CONVERTER, "--help").stdout
+def test_the_declaration_appears_in_help_and_a_run_that_declares_nothing_writes_no_block(tmp_path):
+    """Decision 3, answer 4: the declaration is opt-in, following the `--data-blocks` precedent, so a run that
+    declares no pair writes no block and every manifest row states the answer for a unit the run did not mark."""
+    assert DECLARATION_ARGUMENT in run_script(CONVERTER, "--help").stdout
     assert _run(SAMPLE_CONFIG, tmp_path).returncode == 0
     assert not parts(tf_files(tmp_path), IMPORTS)
+    for row in record_rows(tmp_path)[unit_manifest]:
+        assert row["mode"] == unit_manifest.EMPTY_ANSWER, row
 
 
 # --- 8. The mode as data at the unit, and the field decision 2 names (`docs/IMPORT_BINDING.md` §2) ---
@@ -411,7 +468,7 @@ def test_the_mode_level_is_the_unit_the_one_unit_rule_answers(tmp_path):
     and the unit set read through `units`, so this pin states no unit rule of its own.
     """
     out = tmp_path / "run"
-    assert _run(SAMPLE_CONFIG, out, ("--import-blocks",)).returncode == 0
+    assert _run(SAMPLE_CONFIG, out).returncode == 0
     rows = unit_manifest.parse_rows((out / unit_manifest.MANIFEST_FILE).read_text(encoding="utf-8"))
     assert rows, "the pin reads a record with content"
     assert len(unit_manifest.units(rows)) == len(rows), "the record is one row per unit"
@@ -429,8 +486,9 @@ def test_the_field_name_and_the_pair_are_each_stated_once_in_their_owner(tmp_pat
     shapes name no field for the mode, and this module defines no field name of its own.
 
     Measured 2026-11-25 on `SAMPLE_CONFIG` run through the pipeline, with each row read back through its module's
-    `parse_rows`, so this pin states no shape of its own. No argument declares a mode yet (decision 3), so every
-    manifest row states the answer for a unit the run did not mark, read through its owner.
+    `parse_rows`, so this pin states no shape of its own. Decision 3 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26)
+    takes the answer for a run that declares no pair, so the pin runs without a declaration and every manifest row
+    states the answer for a unit the run did not mark, read through its owner.
     """
     shapes = {
         "unit_manifest": unit_manifest.FIELD_ORDER,
@@ -447,7 +505,7 @@ def test_the_field_name_and_the_pair_are_each_stated_once_in_their_owner(tmp_pat
     assert not hasattr(import_blocks, "MODE_FIELD"), "this module states no field name for the mode"
     assert not hasattr(unit_manifest, "MODE_VALUES"), "the reader reads the pair through its owner"
     out = tmp_path / "run"
-    assert _run(SAMPLE_CONFIG, out, ("--import-blocks",)).returncode == 0
+    assert _run(SAMPLE_CONFIG, out).returncode == 0
     rows = record_rows(out)
     assert any(rows.values()), "the pin reads a record with content"
     for record_module, record in rows.items():
@@ -471,3 +529,66 @@ def test_the_mode_data_adds_no_unit_rule_and_no_mode_rule_to_the_owner():
     for other in (unit_manifest, ownership, reference_edges, rule_data, site_data, entry_coverage, sanity_checks):
         assert not hasattr(other, "MODE_VALUES"), (other.__name__, "a second pair of mode values")
         assert not hasattr(other, "MODE_LEVEL"), (other.__name__, "a second level for the mode")
+
+
+# --- 9. The write answer for the pair, read through the row owner (decision 3) ---
+
+
+def test_a_unit_declared_the_block_value_writes_blocks_and_a_unit_declared_the_other_value_writes_none(tmp_path):
+    """Rule 7, read through the row owner: the value that writes blocks is the answer `unit_manifest.unit_writes_blocks`
+    gives for a unit's row, so this module states no write rule of its own. A pair names the units that hold the fact
+    its place names, so a unit the declaration marks with the value that writes blocks answers True, a unit marked the
+    other value answers False, and a unit no pair names answers False because its row states the empty answer. The
+    file is written for a unit that answers True and has block content, the rule this module already states.
+
+    Measured 2026-11-26 on `report_grouping.xml` read back through `parse_rows`: 11 rows, 5 pairs, and 7 parts when
+    every pair is declared. The pins read three pairs that name 3, 2 and 2 rows, hold no unit in common, and hold 2,
+    2 and 1 parts, declare two of them with a different value each, and name no pair for the third, so the run wrote
+    the 2 parts for the units the first pair names and none for the units the other two name.
+    """
+    source = FIXTURES_DIR / "report_grouping.xml"
+    whole = tmp_path / "whole"
+    first, pairs = _declared(source, whole)
+    assert first.returncode == 0, pairs
+    rows = record_rows(whole)[unit_manifest]
+    assert len(rows) == 11 and len(pairs) == 5, (len(rows), pairs)
+    written = parts(_files(whole), IMPORTS)
+    assert len(written) == 7, sorted(written)
+
+    def rows_named(pair: tuple) -> list:
+        """The rows the pair names, read through `pair_parts` and `fact`, the rules `unit_manifest.py` owns, so this
+        module holds no place-to-fact mapping of its own.
+        """
+        key, name = unit_manifest.pair_parts(pair[0])
+        return [row for row in rows if unit_manifest.fact(unit_manifest.facts_of(row), key) == name]
+
+    def parts_for(group: list) -> list:
+        return sorted(f"{row['directory']}/{IMPORTS}" for row in group if f"{row['directory']}/{IMPORTS}" in written)
+
+    block, other, quiet = pairs[0], pairs[3], pairs[4]
+    named = (rows_named(block), rows_named(other), rows_named(quiet))
+    assert [len(group) for group in named] == [3, 2, 2], named
+    assert [len(parts_for(group)) for group in named] == [2, 2, 1], named
+    assert len({row["directory"] for group in named for row in group}) == 7, (
+        "the three pairs name different units, so no unit holds two values in the declaration the pins read",
+    )
+
+    declaration = (block, (other[0], MODE_VALUES[1]))
+    mixed = tmp_path / "mixed"
+    result = _run(source, mixed, declaration_args(declaration))
+    assert result.returncode == 0, (result.stderr, declaration)
+    parts_after = sorted(parts(_files(mixed), IMPORTS))
+    assert parts_after == parts_for(named[0]), (parts_after, block)
+
+    # The answer, read through the row owner, agrees with the declaration for every row in the run, and each row
+    # states the value its pair declared, or the empty answer for a unit no pair named.
+    mixed_rows = record_rows(mixed)[unit_manifest]
+    assert len(mixed_rows) == 11, mixed_rows
+    for pair, want in (block, (other[0], MODE_VALUES[1]), (quiet[0], unit_manifest.EMPTY_ANSWER)):
+        key, name = unit_manifest.pair_parts(pair)
+        for row in mixed_rows:
+            if unit_manifest.fact(unit_manifest.facts_of(row), key) == name:
+                assert row["mode"] == want, (row["unit"], row["mode"], want)
+                assert unit_manifest.unit_writes_blocks(mixed_rows, unit_manifest.facts_of(row)) == (
+                    want == MODE_VALUES[0]
+                ), (row["unit"], row["mode"], "the answer is the value that writes blocks")

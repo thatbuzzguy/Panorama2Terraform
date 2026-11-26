@@ -1,8 +1,9 @@
 """F6.1: the unit boundary as data, the codebase manifest.
 
-Nine groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3), and the last two groups for
-the two unit sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5) and for the units an update run wrote
-(`docs/MULTI_RUN_CODEBASE.md` §4 rule 1):
+Ten groups, one per rule in `unit_manifest.py` (`docs/CODEBASE_ASSEMBLY.md` §3), the last two for the two unit
+sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5) and for the units an update run wrote
+(`docs/MULTI_RUN_CODEBASE.md` §4 rule 1), and the last one for the declaration rule (`docs/IMPORT_BINDING.md` §2,
+decision 3, taken 2026-11-26):
 
 1. The unit. One row per combination of the five scope facts, built from the ledger
    `entry_coverage.py` already writes, so F6.1 adds no parse data. F8.7: the unit join in
@@ -21,15 +22,23 @@ the two unit sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5) a
 8. The two unit sets, read through the one rule over two row sets.
 9. The units an update run wrote: `units` over the rows its own ledger built, so the directories it wrote
    inside are the directories its own set names.
+10. The declaration. One pair is one scope path and one value, and it reaches a unit through `units` and the one
+   pair between a place and the fact it names, so this module holds no mapping of its own and names no directory.
+   The pairs are sorted by name, so no answer depends on the order they were declared. A unit a pair names prints
+   that pair's value and a unit no pair names prints `EMPTY_ANSWER`. Two modes for one unit are an input refusal,
+   so the run exits 1 and writes no file. The pair shape is the CLI's rule, and the argument is held by the CLI,
+   so no rule owner states a flag of its own; the write step reads the answer through this module.
 
 The manifest names the directory; F6.1 does not write one. Every test runs offline.
 """
 
+import argparse
 import ast
 import contextlib
 import hashlib
 import io
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -47,11 +56,14 @@ import sanity_checks
 import site_data
 import source_fetch
 import unit_manifest
+import xml_input
 from conftest import (
     CODEBASE_FIXTURE,
+    DECLARATION_ARGUMENT,
     FIXTURES_DIR,
     GOLDEN_DIR,
     MODE_VALUES,
+    PAIR_JOIN,
     RESOURCE_ADDRESS_RE,
     RESPONSES_DIR,
     RUN_FIXTURE,
@@ -59,7 +71,11 @@ from conftest import (
     SRC_DIR,
     corpus_fixtures,
     data_file_set,
+    declaration_args,
+    declaration_pairs,
     file_text,
+    pair_for,
+    pair_text,
     partial_run,
     record_rows,
     run_script,
@@ -986,3 +1002,319 @@ def test_the_units_the_run_names_are_the_units_it_wrote_files_inside(converter_m
     assert all(after[key] == before[key] for key in outside), (
         "every byte inside those 10 directories is the byte the first run wrote",
     )
+
+
+# --- 10. The declaration names units (Epic 14, Piece 14A.3) -------------------
+
+
+def test_the_declaration_names_the_units_inside_the_scope_through_the_one_unit_rule(tmp_path):
+    """Rule 6: one pair is one scope path and one value, and it reaches a unit through the one unit rule and the
+    one pair between a place and the fact it names, so this module holds no mapping of its own and the declaration
+    names no directory.
+
+    Measured 2026-11-26 on `GROUPING` run through the script and read back through `parse_rows`: the rows show 5
+    pairs, and the pairs name 3, 2, 2, 2 and 2 units through `units`, which is the whole set of 11 with no unit
+    named by two pairs. The pair for `Datacenter-FW` names `Datacenter-FW`, `fw-2.example.com` and `vsys2` through
+    `unit_name`, and the pair for `HQ-Networks` names `HQ-Networks` and `fw-1.example.com`, so a pair names the
+    units inside the place as well as the place itself. `pair_parts` reads the place, the entry segment and the
+    fact through `container_coverage`, so the pair is stated once there, and the scan finds no dict literal in
+    `unit_manifest.py` whose keys are all places.
+    """
+    _run(FIXTURES_DIR / GROUPING, tmp_path)
+    rows = _manifest(tmp_path)
+    pairs = declaration_pairs(rows, MODE_VALUES[0])
+    assert len(pairs) == 5, pairs
+
+    named = {}
+    for pair in pairs:
+        key, name = unit_manifest.pair_parts(pair[0])
+        assert key == container_coverage.fact_of_place(container_coverage.path_place(pair[0])), pair
+        units = [facts for facts in unit_manifest.units(rows) if unit_manifest.fact(facts, key) == name]
+        named[pair[0]] = sorted(unit_manifest.unit_name(facts) for facts in units)
+    assert named == {
+        "device-group/entry/Datacenter-FW": ["Datacenter-FW", "fw-2.example.com", "vsys2"],
+        "device-group/entry/Office-FW": ["Office-FW", "fw-1.example.com"],
+        "devices/entry/fw-2.example.com": ["fw-2.example.com", "fw-2.example.com"],
+        "templates/entry/DC-Networks": ["DC-Networks", "DC-Networks"],
+        "templates/entry/HQ-Networks": ["HQ-Networks", "fw-1.example.com"],
+    }, named
+    assert sum(len(units) for units in named.values()) == len(list(unit_manifest.units(rows))), named
+    assert named["device-group/entry/Datacenter-FW"] == ["Datacenter-FW", "fw-2.example.com", "vsys2"], named
+
+    # The pair is stated once in its owner, and the rule names no directory, so a declaration cannot move a file.
+    source = (SRC_DIR / "unit_manifest.py").read_text(encoding="utf-8")
+    for word in (
+        "container_coverage.path_place(",
+        "container_coverage.path_segments(",
+        "container_coverage.fact_of_place(",
+    ):
+        assert word in source, (word, "the pair reaches a unit through its owner")
+    places = set(container_coverage.SCOPE_PATH_ROOTS)
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            keys = [key.value for key in node.keys if isinstance(key, ast.Constant)]
+            if keys and all(key in places for key in keys):
+                raise AssertionError((dict(zip(keys, node.values, strict=True)), "a second mapping of the pair"))
+    pair_rule = next(node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "pair_parts")
+    assert not [
+        node.attr for node in ast.walk(pair_rule) if isinstance(node, ast.Attribute) and node.attr == "directory_name"
+    ], "the declaration names no directory"
+
+
+def test_the_declaration_pairs_are_sorted_by_name_so_no_answer_depends_on_the_order(tmp_path, converter_module):
+    """Rule 6, the CLI half: the pairs are sorted by the name of the place they state before the run reads them, so
+    no answer depends on the order the operator declared them, and two runs that declare the same pairs in a
+    different order write the same bytes.
+
+    Measured 2026-11-26 on `GROUPING` through the script, read through `tests/conftest.py`: 60 files, 49 of them
+    `.tf` and 7 `imports.tf`, and the bytes a run writes for a declaration stated in reverse order equal the bytes
+    it writes for the same declaration in the sorted order. The rule reads the pairs through `shared_arguments`,
+    the argument set both entry points read, and answers them in the sorted order, and the row order stays the
+    identity order the row rule states, so the record bytes do not depend on the declaration order either.
+    """
+    _run(FIXTURES_DIR / GROUPING, tmp_path)
+    pairs = declaration_pairs(_manifest(tmp_path), MODE_VALUES[0])
+    assert list(pairs) == sorted(pairs), pairs
+    assert list(pairs) != list(reversed(pairs)), pairs
+
+    parser = argparse.ArgumentParser()
+    converter_module.shared_arguments(parser)
+    args = parser.parse_args(list(declaration_args(tuple(reversed(pairs)))))
+    assert list(converter_module.import_modes(parser, args)) == list(pairs), args.import_mode
+
+    first, second = tmp_path / "sorted", tmp_path / "reversed"
+    assert _run(FIXTURES_DIR / GROUPING, first, declaration_args(pairs)).returncode == 0
+    assert _run(FIXTURES_DIR / GROUPING, second, declaration_args(tuple(reversed(pairs)))).returncode == 0
+    assert written_bytes(first) == written_bytes(second), "the order the pairs were declared in changes no byte"
+    keys = sorted(written_bytes(first))
+    assert len(keys) == 60, keys
+    assert len([key for key in keys if key.endswith(".tf")]) == 49, keys
+    blocks = [key for key in keys if key.endswith("imports.tf")]
+    assert len(blocks) == 7, blocks
+    dirs = {row["directory"] for row in _manifest(first)}
+    assert all(Path(key).parent.name in dirs for key in blocks), blocks
+
+
+def test_a_declared_unit_prints_its_mode_and_an_undeclared_unit_prints_the_empty_answer(tmp_path):
+    """Rule 6: `build_rows` takes the declaration, so a unit a pair names prints that pair's value on its row and a
+    unit no pair names prints `EMPTY_ANSWER`, the answer a run that declares nothing writes today. The value is read
+    positionally through `MODE_VALUES`, the pair its owner states, so this pin names no value.
+
+    Measured 2026-11-26 on `GROUPING` through the script with one pair, the pair for `Datacenter-FW`: 11 rows, 3 of
+    them state the value and 8 state the empty answer. The 3 rows are the units the pair names through `units`:
+    `Datacenter-FW`, `fw-2.example.com` and `vsys2`. `declared_mode` answers the value for a unit the pair names and
+    the empty answer for a unit it does not, so the row rule reads the declaration through the same pair the run does.
+    """
+    _run(FIXTURES_DIR / GROUPING, tmp_path)
+    pair = declaration_pairs(_manifest(tmp_path), MODE_VALUES[0])[0]
+    out = tmp_path / "declared"
+    assert _run(FIXTURES_DIR / GROUPING, out, declaration_args((pair,))).returncode == 0
+    rows = _manifest(out)
+    assert len(rows) == 11, rows
+    declared = [row for row in rows if row["mode"] == MODE_VALUES[0]]
+    assert len(declared) == 3, declared
+    assert sorted(row["unit"] for row in declared) == ["Datacenter-FW", "fw-2.example.com", "vsys2"], declared
+    assert all(row["mode"] == unit_manifest.EMPTY_ANSWER for row in rows if row not in declared), rows
+
+    key, name = unit_manifest.pair_parts(pair[0])
+    for facts in unit_manifest.units(rows):
+        expected = MODE_VALUES[0] if unit_manifest.fact(facts, key) == name else unit_manifest.EMPTY_ANSWER
+        assert unit_manifest.declared_mode(facts, (pair,)) == expected, (facts, name)
+
+
+def test_two_modes_for_one_unit_are_refused_and_the_run_writes_no_file(tmp_path, converter_module):
+    """Rule 6: two pairs that name one unit are an input refusal, so the run exits 1 and writes no file, the shape
+    `is_refusal` states, and the line names the unit, the value the merged record names for it, and the value the run
+    declares. The refusal is `xml_input.UnsafeInputError`, the kind the entry point reads, so the exit code is the
+    refusal code and not the argument code.
+
+    Measured 2026-11-26 on `GROUPING` through the script: the two pairs name the unit `fw-2.example.com`, and the
+    sorted order reads the pair that states the second value first, so the record answer for the unit is that value
+    and the line names the other one as the declaration. The output directory does not exist. Read through
+    `check_declared_modes` with no record, the same refusal reaches the run's own rows through `units`.
+    """
+    _run(FIXTURES_DIR / GROUPING, tmp_path)
+    rows = _manifest(tmp_path)
+    first = pair_for("devices", "fw-2.example.com", MODE_VALUES[0])
+    second = pair_for("devices", "fw-2.example.com", MODE_VALUES[1])
+    out = tmp_path / "refused"
+    proc = _run(FIXTURES_DIR / GROUPING, out, declaration_args((first, second)))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert not out.exists(), "the refusal happens before the run writes"
+    line = next(line for line in proc.stdout.splitlines() if line.startswith("Error:"))
+    assert line == (
+        "Error: refusing to declare two modes for unit fw-2.example.com: the merged record names "
+        f"{MODE_VALUES[1]} and this run declares {MODE_VALUES[0]}"
+    ), line
+
+    with pytest.raises(xml_input.UnsafeInputError) as raised:
+        unit_manifest.check_declared_modes((first, second), [], rows)
+    assert "fw-2.example.com" in str(raised.value), raised.value
+    assert converter_module.is_refusal(raised.value), "the refusal is the kind the entry point reads"
+
+
+def test_a_declared_mode_that_disagrees_with_the_record_is_refused_and_writes_no_file(tmp_path):
+    """Rule 6, the record half: the value a run declares must agree with the value the merged record names for the
+    same unit, so a run that declares the other value for a unit it read only through the record is refused before it
+    writes, exits 1, and leaves the record as it read it.
+
+    Measured 2026-11-26 on the committed pair through `tests/conftest.py`: the first run declares the value that
+    writes blocks for `Dev-DG` and writes 84 files, 62 of them `.tf`, and its record row for `Dev-DG` states that
+    value. The copy is the codebase the second run writes into. `RUN_FIXTURE` shows 1 unit, `Shared`, so `Dev-DG`
+    reaches the second run only through the record, and the second run declares the other value for it: exit 1, the
+    same 84 files with the same bytes, and the line names `Dev-DG`, the value the record states and the value the run
+    declares.
+    """
+    codebase = tmp_path / "codebase"
+    pair = pair_for("device-group", "Dev-DG", MODE_VALUES[0])
+    assert _run(FIXTURES_DIR / CODEBASE_FIXTURE, codebase, declaration_args((pair,))).returncode == 0
+    record = _manifest(codebase)
+    assert [row["mode"] for row in record if row["unit"] == "Dev-DG"] == [MODE_VALUES[0]], record
+
+    own = tmp_path / "own"
+    assert _run(FIXTURES_DIR / RUN_FIXTURE, own).returncode == 0
+    own_rows = _manifest(own)
+    assert [row["unit"] for row in own_rows] == ["Shared"], own_rows
+
+    partial = tmp_path / "partial"
+    shutil.copytree(codebase, partial)
+    other = pair_for("device-group", "Dev-DG", MODE_VALUES[1])
+    proc = _run(FIXTURES_DIR / RUN_FIXTURE, partial, declaration_args((other,)))
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    line = next(line for line in proc.stdout.splitlines() if line.startswith("Error:"))
+    assert line == (
+        "Error: refusing to declare two modes for unit Dev-DG: the merged record names "
+        f"{MODE_VALUES[0]} and this run declares {MODE_VALUES[1]}"
+    ), line
+    before, after = written_bytes(codebase), written_bytes(partial)
+    assert len(before) == 84 and len(after) == 84, (len(before), len(after))
+    assert before == after, "the refusal wrote no file"
+    with pytest.raises(xml_input.UnsafeInputError):
+        unit_manifest.check_declared_modes((other,), record, own_rows)
+
+
+def test_a_pair_that_names_no_unit_is_an_argument_error(tmp_path):
+    """Rule 6, the CLI half: the pair shape is the CLI's rule, so a shape error exits 2 and writes no file, and the
+    row owner answers no error of its own, which is why the row rule cannot exit and the argument rule can.
+
+    Measured 2026-11-26 on `GROUPING` through the script: each of the five shapes exits 2 and writes no output
+    directory - a pair with no join, a value outside the pair, a place the one scope path definition refuses, a place
+    that names no fact, and a pair that names the place only. `pair_parts` answers the fact key with `None` for a
+    place that names no fact and the empty name for a place-only pair, so the answer the argument rule refuses is the
+    row owner's answer, stated without an error.
+    """
+    shapes = [
+        pair_text(pair_for("device-group", "Datacenter-FW", MODE_VALUES[0])).replace(PAIR_JOIN, ""),
+        pair_text(pair_for("devices", "fw-2.example.com", "outside-the-pair")),
+        pair_text(pair_for("bogus", "x", MODE_VALUES[0])),
+        pair_text(pair_for("shared", "url-list", MODE_VALUES[0])),
+        "device-group",
+    ]
+    for shape in shapes:
+        out = tmp_path / shape.replace("/", "_")
+        proc = run_script(
+            CONVERTER, str(FIXTURES_DIR / GROUPING), "--output-dir", str(out), DECLARATION_ARGUMENT, shape
+        )
+        assert proc.returncode == 2, (shape, proc.stdout + proc.stderr)
+        assert not out.exists(), (shape, "an argument error writes no file")
+
+    assert unit_manifest.pair_parts(pair_for("shared", "url-list", MODE_VALUES[0])[0]) == (None, "url-list")
+    assert unit_manifest.pair_parts("device-group") == (container_coverage.fact_of_place("device-group"), "")
+    assert "parser.error" not in (SRC_DIR / "unit_manifest.py").read_text(encoding="utf-8")
+
+
+def test_the_declaration_is_held_by_the_cli_and_the_rule_owner_states_no_flag_of_its_own(tmp_path, converter_module):
+    """Rule 6: the declaration is an argument, so the CLI holds it and the rule owner states no flag of its own. The
+    argument is stated once, in `shared_arguments`, the set both entry points read, and both entry points read the
+    pairs through the one rule, so no entry point holds a second reader of the declaration.
+
+    Measured 2026-11-26: `shared_arguments` holds one `add_argument` for the argument, `import_modes` is defined once
+    in `panorama_to_terraform.py` and called once there and once in `api_to_terraform.py`, and the argument name
+    appears in no rule owner. A run that declares nothing reads no pair, so the rule answers the empty set and the
+    run writes the bytes a default run writes, which is the golden answer.
+    """
+    generator = (SRC_DIR / "panorama_to_terraform.py").read_text(encoding="utf-8")
+    api = (SRC_DIR / "api_to_terraform.py").read_text(encoding="utf-8")
+    shared = next(
+        node
+        for node in ast.walk(ast.parse(generator))
+        if isinstance(node, ast.FunctionDef) and node.name == "shared_arguments"
+    )
+    held = [
+        node
+        for node in ast.walk(shared)
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "attr", None) == "add_argument"
+        and node.args
+        and getattr(node.args[0], "value", None) == DECLARATION_ARGUMENT
+    ]
+    assert len(held) == 1, held
+    trees = [ast.parse(generator), ast.parse(api)]
+    defs = [
+        node
+        for tree in trees
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "import_modes"
+    ]
+    assert len(defs) == 1, defs
+    calls = [
+        node
+        for tree in trees
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and (getattr(node.func, "id", None) == "import_modes" or getattr(node.func, "attr", None) == "import_modes")
+    ]
+    assert len(calls) == 2, calls
+
+    owners = ("unit_manifest.py", "import_blocks.py", "container_coverage.py", "naming.py", "write_path.py")
+    for name in owners:
+        text = (SRC_DIR / name).read_text(encoding="utf-8")
+        assert "add_argument" not in text, (name, "a rule owner states no argument")
+        assert DECLARATION_ARGUMENT not in text, (name, "the flag is the CLI's")
+    assert DECLARATION_ARGUMENT in generator, "the CLI holds the argument"
+
+    parser = argparse.ArgumentParser()
+    converter_module.shared_arguments(parser)
+    args = parser.parse_args([])
+    assert converter_module.import_modes(parser, args) == [], args
+    out = tmp_path / "default"
+    assert _run(FIXTURES_DIR / GROUPING, out).returncode == 0
+    assert not list(out.rglob("imports.tf")), "a run that declares nothing writes no block file"
+
+
+def test_the_write_step_reads_the_mode_through_the_row_owner_and_names_no_value(tmp_path):
+    """Rule 6, the write half: the answer for whether a unit writes blocks is a rule function in the row owner, and
+    the value that writes blocks is read positionally through `import_blocks.MODE_VALUES`, so the write step states no
+    value of the pair and `import_blocks.py` states no mode rule of its own. This module writes no file, which
+    `tests/test_write_path.py::test_a_record_module_renders_rows_and_writes_no_file` pins, so the write step answers
+    the fact and `write_path.py` writes.
+
+    Measured 2026-11-26 on `GROUPING` through the script with one pair for `Datacenter-FW`: 3 rows state the value,
+    and `imports.tf` is written inside 2 of the 3 unit directories those rows name; the third unit writes no block
+    file because the run wrote nothing inside it, which is the content rule. No block file is written outside a
+    directory a declared row names, and the run's answer is True for each declared row and False for every other row.
+    """
+    _run(FIXTURES_DIR / GROUPING, tmp_path)
+    pair = declaration_pairs(_manifest(tmp_path), MODE_VALUES[0])[0]
+    out = tmp_path / "declared"
+    assert _run(FIXTURES_DIR / GROUPING, out, declaration_args((pair,))).returncode == 0
+    rows = _manifest(out)
+    declared = [row for row in rows if row["mode"] == MODE_VALUES[0]]
+    assert len(declared) == 3, declared
+    dirs = {row["directory"] for row in declared}
+    blocks = sorted(str(p.relative_to(out)) for p in out.rglob("imports.tf"))
+    assert len(blocks) == 2, blocks
+    assert all(Path(key).parent.name in dirs for key in blocks), blocks
+    for row in rows:
+        facts = tuple(row[key] for key in unit_manifest.FACT_KEYS)
+        assert unit_manifest.unit_writes_blocks(rows, facts) == (row["mode"] == MODE_VALUES[0]), row
+
+    generator = (SRC_DIR / "panorama_to_terraform.py").read_text(encoding="utf-8")
+    source = (SRC_DIR / "unit_manifest.py").read_text(encoding="utf-8")
+    blocks_owner = (SRC_DIR / "import_blocks.py").read_text(encoding="utf-8")
+    assert "unit_manifest.unit_writes_blocks(" in generator, "the write step reads the answer through the row owner"
+    assert "import_blocks.MODE_VALUES[0]" in source, "the answer reads the value through its owner"
+    for value in MODE_VALUES:
+        assert f'"{value}"' not in generator, (value, "the write step states no value of the pair")
+    assert "unit_writes_blocks" not in blocks_owner, "the pair owner states no mode rule of its own"

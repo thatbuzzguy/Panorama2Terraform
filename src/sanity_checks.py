@@ -694,7 +694,9 @@ def check_import_blocks(files: dict[str, str]) -> list[Finding]:
 
     A `*_policy_rules` entry writes no block: its import object names the rulebase, the position, and a
     list (`import_blocks` rule 5). The run reports the entry as an operator action, so the finding is WARN
-    and the exit code is unchanged. It is reported only when the run declared import blocks.
+    and the exit code is unchanged. It is reported only when the reader read at least one block, so only for
+    a run that declared a pair for a unit that had a block to write: a run that declares no pair reads no
+    block here, so it reports none.
     """
     import_blocks_read = blocks(files, ("import",))
     resources = {(block.rtype, block.local): block for block in resource_blocks(files)}

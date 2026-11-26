@@ -88,7 +88,7 @@ python3 src/panorama_to_terraform.py export.xml --output-dir out
 | `--state PATH` | Terraform state document read as a reference source (F5.6). Applies to any source kind |
 | `--workspace NAME` | The workspace the state document belongs to, so the record names it. Needs `--state` |
 | `--data-blocks SCOPE` | A reference scope this run may read through, as a provider data source type. Repeatable, or a comma-separated list. Off by default (F5.5) |
-| `--import-blocks` | Write one `import` block per entry the run declares, in `imports.tf`. Off by default (F6.4) |
+| `--import-mode PAIR` | One scope path and one value of the mode, joined by `=`. Repeatable, sorted by the place the pair names. A unit the declaration marks writes its `import` blocks in `imports.tf`; a unit marked with the other value writes none, and a run that declares no pair writes none. Off by default (F6.4) |
 | `--output-dir DIR` | Output directory. Default `terraform_output` |
 | `--max-input-bytes N` | Refuse an input larger than N. Default 67,108,864 (64 MiB) |
 | `--validate` | Add the `terraform init` + `terraform validate` check to the post-run gate |
@@ -210,17 +210,24 @@ python3 src/panorama_to_terraform.py export.xml --data-blocks panos_address,pano
 ### Import blocks (opt-in)
 
 ```bash
-python3 src/panorama_to_terraform.py export.xml --import-blocks --output-dir out
+python3 src/panorama_to_terraform.py export.xml --import-mode device-group/entry/Datacenter-FW=imported --output-dir out
 ```
 
-- Off by default. A run that does not declare it writes no `imports.tf`, so the generated `.tf` files
-  are unchanged.
-- One `import` block per entry the run declares, in the unit's own `imports.tf`, in local-name order; the run
-  writes one file per unit, so the unit order is the path order. Each block states `to` (the block address)
-  and `id` (base64 of the location object plus the entry name, the provider shape).
+- Off by default. A run that declares no pair writes no `imports.tf`, so the generated `.tf` files are unchanged,
+  and every manifest row states the answer for a unit the run did not mark.
+- A pair is one scope path and one value of the mode, joined by `=`. The argument is repeatable, and the pairs are
+  sorted by the place they name, so the order they were declared in changes nothing.
+- A unit a pair marks writes the blocks for its own entries in its own `imports.tf`, in local-name order; the run
+  writes one file per unit, so the unit order is the path order. A unit marked with the other value writes none, and
+  a unit with no block to write is written nothing, which is the rule that a file is written only when it has
+  content. Each block states `to` (the block address) and `id` (base64 of the location object plus the entry name,
+  the provider shape).
 - The block and the id state one fact: the location comes from the same rule the resource block renders
   from, and the local name comes from the same naming rule. `panorama_device` is not stated, because the
   generator emits no device fact.
+- A pair that names a unit already marked with a different value in the record is refused before the run writes, so
+  the run exits 1, prints the refusal line, and names the unit, the value the record states, and the value the run
+  declares. A pair the shape rule refuses is an argument error, so it exits 2 and writes no file.
 - A gate rule reads the file (`import_blocks`, §4.6 of [ARCHITECTURE.md](ARCHITECTURE.md)): a block must
   agree with the resource block it names. A wrong type, a wrong local name, a wrong location, or a wrong
   name is a FAIL finding, so the run exits 1.
@@ -241,7 +248,7 @@ Path 2 reads only responses, one response per scope, and writes the same codebas
 membership responses (§2.2), the run order (§6), and the request-set gate rule (§3).
 
 - The arguments are the shared set (`panorama_to_terraform.shared_arguments`): `--host` (required), `--cache-dir`,
-  `--offline`, `--insecure`, `--output-dir`, `--validate`, `--tflint`, `--data-blocks`, `--import-blocks`,
+  `--offline`, `--insecure`, `--output-dir`, `--validate`, `--tflint`, `--data-blocks`, `--import-mode`,
   `--state`, `--workspace`, `--prune-cache`, `--selection`, `--max-input-bytes`. The entry point adds no argument
   of its own, so it takes no input file and refuses the arguments that name one source (`--source`, `--path`,
   `--parent`). The selection names the read set, not a source, so it is not refused here, and its rules are the
@@ -305,7 +312,7 @@ directory, so a table row names the file, not the path.
 | `interfaces.tf`, `zones.tf`, `virtual_routers.tf`, `monitor_profiles.tf`, `vpn.tf` | Network and VPN resources |
 | `filters.tf` | Routing-profile filter containers, one resource per entry (F7.8) |
 | `read_through.tf` | One `data` block per name a reference needed and the run did not read. Written only for a run that declares `--data-blocks` (F5.5) |
-| `imports.tf` | One `import` block per entry the run declares, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a run that declares `--import-blocks` and has a block to write (F6.4) |
+| `imports.tf` | One `import` block per entry of a unit the declaration marks, as `to` and `id`: the block address, and base64 of the location object plus the entry name. Written only for a marked unit that has a block to write (F6.4) |
 | `actions.tf` | One `action` block per action the pinned provider schema declares, for each unit the manifest names: the commit, then the push. Written last, and only when it has content (F6.7, F6.10.4) |
 | `README.md` | Deployment steps for the generated directory, plus the section that names `imports.tf`, `SITE_DATA.json` and `site.auto.tfvars` (F6.10.4) |
 | `SOURCE.txt` | One record per source the run read, as `field: value` data: kind, name, member, path, scope, request, cache_entry, size, and the SHA-256 hex of the parsed bytes. Written at the codebase root, which is the output directory, and it is the file the `--prune-cache` action reads |

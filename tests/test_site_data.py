@@ -41,12 +41,16 @@ import unit_manifest
 from conftest import (
     FIXTURES_DIR,
     GOLDEN_DIR,
+    MODE_VALUES,
     SAMPLE_CONFIG,
     SRC_DIR,
     api_producer,
     data_file_set,
+    declaration_args,
+    declaration_pairs,
     file_text,
     parts,
+    record_rows,
     run_script,
     tf_files,
 )
@@ -689,12 +693,16 @@ def test_the_variable_rule_reads_both_directions():
 
 def test_the_corpus_trips_neither_rule(tmp_path):
     """No fixture produces a FAIL finding for either rule, so the mapping cannot make a clean run
-    fail. The import rule reads the `.tf` files, so the run is asked to write them.
+    fail. The import rule reads the `.tf` files, so the pins read the blocks the declaration writes: the pairs are
+    built from the units the run's own manifest rows show, through `conftest.declaration_pairs`, the one place a pin
+    builds a pair, so this module holds no place-to-fact mapping of its own.
     """
     for name in sorted(CORPUS_ROWS):
         out = tmp_path / name
-        proc = _run(FIXTURES_DIR / name, out, extra=("--import-blocks",))
-        assert proc.returncode == 0, name
+        assert _run(FIXTURES_DIR / name, out).returncode == 0, name
+        pairs = declaration_pairs(record_rows(out)[unit_manifest], MODE_VALUES[0])
+        proc = _run(FIXTURES_DIR / name, out, extra=declaration_args(pairs))
+        assert proc.returncode == 0, (name, pairs)
         report = sanity_checks.run_checks(out)
         for check in ("import_blocks", "variables"):
             assert not [finding for finding in report.findings(check) if finding.severity == sanity_checks.FAIL], (

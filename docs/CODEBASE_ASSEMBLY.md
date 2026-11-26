@@ -351,11 +351,14 @@ rule exists.
    reads the four data files, so the two file sets are now distinct: a block is read by the block reader,
    and a row is read through the module that owns its shape. §3 rule 5 keeps the record at the codebase root,
    and the write path (§14) writes `imports.tf` as a unit-set file, so the run writes one file per unit.
-   The file is written only when the run declares the shape and has a row that states an id,
+   The file is written only when the run declares a unit that has a row that states an id,
    following the rule for the report files and the four data files.
-2. **The shape is opt-in: `--import-blocks`, off by default.** A run that declares nothing writes the
-   same `.tf` bytes as before, so both golden sets stay byte-identical. This is the F5.5
-   `--data-blocks` precedent (`ARCHITECTURE.md` §4.7).
+2. **The shape is opt-in: `--import-mode`, off by default.** A pair is one scope path and one value, and the
+   argument names one pair per declared scope, so a declaration names units and not the whole run. A run that
+   declares nothing writes the same `.tf` bytes as before, so both golden sets stay byte-identical, and every
+   manifest row states the answer for a unit the run did not mark. This is the F5.5 `--data-blocks` precedent
+   (`ARCHITECTURE.md` §4.7), and the value set is `import_blocks.MODE_VALUES`, read through its owner, so no module
+   states a value of the pair a second time.
 3. **The block states two fields, in this order:** `to`, then `id`. `to` is the block address
    `<type>.<local name>`; `id` is the base64 string.
 4. **The id is base64 of the JSON object** (§12), with keys sorted at every level and compact
@@ -396,7 +399,8 @@ Pinned by `tests/test_import_blocks.py`, including `::test_the_id_round_trips`,
 `::test_the_rule_reads_import_blocks_with_the_one_reader`,
 `::test_the_id_states_the_location_the_block_states`,
 `::test_the_module_defines_no_location_rule_and_no_naming_rule`,
-`::test_two_runs_write_the_same_bytes`, and `::test_a_run_that_declares_no_import_blocks_writes_the_golden_bytes`.
+`::test_two_runs_write_the_same_bytes`, `::test_a_run_that_declares_no_pair_writes_the_golden_bytes`, and
+`::test_a_unit_declared_the_block_value_writes_blocks_and_a_unit_declared_the_other_value_writes_none`.
 
 One half of this section stays open:
 
@@ -435,9 +439,10 @@ are in `resource_mapping.py`, and `main()` calls the emitter for every run.
 3. **The entry name is the row identity, not a property.** The entry name and the five scope facts
    are `entry_coverage.NON_FIELD_KEYS`. For `panos_device_group_parent` the provider declares no
    `name`, so the block carries the entry name through `entry_coverage.name_field`: `DATA_SOURCE_SCHEMA`
-   says whether the type declares a `name`, and `REPORT_SCOPE_KEYS` is the one mapping from a scope
-   container to the field its entry name reaches the output through. The emitter, the import agreement
-   gate (§7 rule 4), and `tests/test_coverage_matrix.py` read that one rule. One device-group entry can
+   says whether the type declares a `name`, and `REPORT_SCOPE_KEYS` builds through `container_coverage.fact_of_place`,
+   the one statement of the pair between a place and the fact it names (`container_coverage.py` rule 4), so this
+   module holds no mapping of its own. The emitter, the import agreement gate (§7 rule 4), and
+   `tests/test_coverage_matrix.py` read that one rule. One device-group entry can
    feed two blocks — the scope object and the parent record — so the property scan measures the entry
    against the row that covers its container, and the parent row has no read of its own to measure.
 4. **The value shape is a provider fact.** `SCOPE_SHAPE` states the shape the emitter prints for each

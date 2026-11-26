@@ -305,14 +305,14 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   read a source read a `src/` module source, so a change inside a test module cannot trip them. Owners:
   `tests/conftest.py` and `docs/MULTI_RUN_CODEBASE.md` §5 rule 1.
 
-- **The mode field has no declaration rule, so no run marks a unit.** Measured 2026-11-25: the pair and the level are
-  data in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`) for decision 1, the field is data in
-  `src/unit_manifest.py` for decision 2, taken that day, and `unit_manifest.parse_rows` is the reader that uses the
-  pair. Decision 3 is untaken, so no argument declares a mode, so every row a run writes states the answer for a unit
-  the run did not mark, and a mode value reaches a record only through a row a person writes by hand. The pins read the
-  pair through `tests/conftest.py`, the one definition the four modules read, and read the empty answer through
-  `unit_manifest`, its owner, so no test module holds a copy. Owners: `src/import_blocks.py`,
-  `docs/IMPORT_BINDING.md` §2 decision 3, `src/unit_manifest.py`, and `tests/test_import_blocks.py` group 8.
+- **The one mapping pin holds a dict literal whose keys are all places, so three tables that pair a place word with a
+  fact key sit outside it.** Measured 2026-11-26 on the `ast` scan the pin runs: `resource_mapping.SCOPE_ANSWER`
+  pairs the XML element word with the fact key (`device_groups` with `device_group`), `state_coverage.STATE_SCOPE_KEYS`
+  pairs the key the state document names with the fact key (`ngfw` with `vsys_device`), and the dict in
+  `split_device_groups.py` pairs `template_stacks` with `template stack`. None of the three has keys that are all
+  places, so the pin cannot hold them, and each table states its own pair for a fact the run reads from a name rather
+  than from a scope path. Owners: `tests/test_container_coverage.py::test_the_fact_a_place_names_is_read_through_the_one_mapping`,
+  `resource_mapping.SCOPE_ANSWER`, `state_coverage.STATE_SCOPE_KEYS`, and `split_device_groups.py`.
 
 - **The operator file has no owner constant, so the pin states its name.** `docs/CODEBASE_ASSEMBLY.md` §11 states the
   rule in prose and `src/site_data.py` owns only the printed form's name, so a pin that places an operator file in the
