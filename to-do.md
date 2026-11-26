@@ -16,18 +16,13 @@ names the decision it needs.
 
 ### Phase 14A, the mode as data
 
-- **14A.1** — complete on main, 2026-11-25, and committed, so this piece's record lives in the git history. The
-  decision is taken: the mode stops at the unit, and each of the two values names the plan outcome for one unit. The
-  pair and the level are data in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`), the module that already holds
-  the binding decision as data, owns the block shape and the row shape, and defines no unit rule, and the pins that
-  read them as data are in `tests/test_import_blocks.py`. No row shape names a field for the mode, so the piece
-  moved no committed data file.
-- **The half of 14A.1 that states the mode as a record field** stays open and is recorded in `backlog.md`, because
-  decision 2 is untaken and fact 11 names the pins a field moves. It is not piece 14A.2's work: piece 14A.1 could
-  not name a value for a run that declares no mode, so it recorded the pair as data only.
-- **14A.2** — the record field that holds the mode: read through `unit_manifest.parse_rows`, merged through
-  `codebase_state.py` rule 2, and read by the `data_files` gate rule. Needs decision 2 and the answer to
-  fact 11, because a field that enters the shape moves the committed rows.
+- **14A.1** and **14A.2** are complete on main, 2026-11-25, and committed, so their records live in the git history.
+  Decision 1 is taken: the two values, and the level the mode sits at. Decision 2 is taken: the field, the owner that
+  states it, and the answer for a unit the run did not mark. The pair and the level are data in
+  `src/import_blocks.py`, the field is data in `src/unit_manifest.py`, and the pins that read them as data are in
+  `tests/test_import_blocks.py` group 8, `tests/test_unit_manifest.py`, `tests/test_data_file_gate.py` and
+  `tests/test_codebase_state.py`, with the pair read through `tests/conftest.py`. No committed golden byte moved,
+  because `tests/golden` holds no data file.
 - **14A.3** — the declaration argument: a scope-name argument read through `container_coverage.is_scope_path`
   and `SCOPE_PATH_ROOTS`, held by the CLI and not by a rule owner. Needs decision 3, which is also the decision
   that an order-dependent declaration is refused.

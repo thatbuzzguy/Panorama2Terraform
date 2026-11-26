@@ -7,8 +7,8 @@ paths a test reads the layout through, states no second path rule, and holds the
 test module reads: the terraform binary, the two resource-line patterns, the rule-block parser, the record
 read-back the Epic 11 pins read (the join key per record, and the four records read back through each module's
 `parse_rows`), and the two runs the partial-run pins read (one run writes a codebase, a second run writes into a
-copy of its output), and the shape-table row the pins read as data. A test module does not define its own copy of
-any of them, and no test module imports another test module.
+copy of its output), the two mode values read through their owner, and the shape-table row the pins read as
+data. A test module does not define its own copy of any of them, and no test module imports another test module.
 """
 
 import contextlib
@@ -148,6 +148,14 @@ PREDEFINED_ENTRY_BODY = '<entry name="url-list"><description>built-in</descripti
 
 # The rule-type set, read through the module that owns it, so no test module states its own list.
 RULE_TYPES = tuple(sorted(import_blocks.rule_types()))
+
+# --- The mode values, shared by the modules that read them (Epic 14, decision 1) ----
+
+# The two mode values, read through the owner `import_blocks`, so no test module states the pair a second time.
+# Four test modules read the pair as data: `tests/test_import_blocks.py` group 8, `tests/test_unit_manifest.py`,
+# `tests/test_data_file_gate.py` and `tests/test_codebase_state.py`. The answer for a unit the run did not mark is
+# read through `unit_manifest`, the owner decision 2 names, so this file holds no copy of it.
+MODE_VALUES = import_blocks.MODE_VALUES
 
 
 def data_file_set(output_dir) -> list[str]:

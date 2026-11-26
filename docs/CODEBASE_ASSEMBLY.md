@@ -100,7 +100,11 @@ it (§14).
    identity, the reference names are sorted, and no field states a timestamp or a path.
    `parse_rows` reads a written file back, and a row that is not the declared shape is a
    refusal, the way `provenance.parse_record` refuses a line that is not a field. The two order
-   fields `rank` and `after` print after the F6.1 fields (§6 rule 1).
+   fields `rank` and `after` print after the F6.1 fields (§6 rule 1). The row also states the mode, the field
+   decision 2 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) names here: the two values are read through
+   `import_blocks.MODE_VALUES`, so this module states the field and not the pair, and a unit the run did not mark
+   prints the answer stated once in `unit_manifest.py` as `EMPTY_ANSWER`, so a run that declares no mode still
+   writes the declared shape.
 5. **One file per codebase run.** The edge list (§5) needs the whole set of units, and a reader
    cannot find a per-unit file before it knows the directory name, so one file holds one row per
    unit, and the write path writes the record at the codebase root (§14 rule 2). `CODEBASE_MANIFEST.json` is

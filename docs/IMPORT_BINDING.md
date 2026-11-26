@@ -80,16 +80,22 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
     time, decides whether `imports.tf` is permanent codebase content or a first-run file. A pin cannot read
     it, because a plan needs a device, so this stays a decision to take on measurement.
 
-11. **A mode field is a shape change, so the committed rows move with it.** `unit_manifest.render` prints every
-    key of `FIELD_ORDER` for every row, so a field that names the mode is printed for a run that declared no
-    mode, and the golden data files move in the same commit as the pins that read the row. The mode can be
-    recorded inside a declared shape, which is a golden change, or outside it, which is no record at all, so the
-    decision cannot be taken without naming which committed files move.
+11. **A mode field is a shape change, so the pins that state the row shape move with it.** `unit_manifest.render`
+    prints every key of `FIELD_ORDER` for every row, so a field that names the mode is printed for a run that
+    declared no mode. Measured 2026-11-25 when decision 2 was taken: `tests/golden` holds no data file, only 87 `.tf`
+    files, so no committed golden byte moves. What moves is the pins that state the row shape as a list, in the same
+    commit as the field: `tests/test_unit_manifest.py::test_the_row_fields_are_the_declared_shape_in_order`,
+    `::test_the_row_states_placement_through_the_fact_keys_it_already_reads`, and
+    `::test_a_row_that_is_not_the_declared_shape_is_refused`, plus the row builder
+    `tests/test_data_file_gate.py::_manifest_row`, which builds a row from the shape it reads through its module and
+    so cannot break. The pins that read a record as data through its own module, such as
+    `tests/test_codebase_state.py::test_the_merge_adds_no_field_so_a_merged_row_reads_back_as_itself`, read the shape
+    and state no list, so they do not move.
 
 ## 2. The decisions to take
 
-Each decision names what it needs. Decision 1 is taken, so the piece that reads it can be written; the rest are
-untaken, so no piece can be written from them yet.
+Each decision names what it needs. Decisions 1 and 2 are taken, so the pieces that read them can be written; the
+rest are untaken, so no piece can be written from them yet.
 
 1. **The mode values, and the level the mode sits at. Taken 2026-11-25: the mode stops at the unit.** Two
    values, and each names the plan outcome for one unit: the entries are imported, or the entries are added. The
@@ -97,29 +103,45 @@ untaken, so no piece can be written from them yet.
    virtual system, a device group, and a template are already units, so a per-device or per-device-group request
    needs no new level. An entry level is not part of this decision: `OWNERSHIP.json` is the record that holds one
    row per entry the run emits, so an entry-level mode would need a field on that row, and this decision takes no
-   field, so no shape gains one and no module states a second mode rule.
+   field of its own: the field is decision 2's, and no module states a second mode rule.
 
-   What the decision settles: the pair, the level, and the fact that it takes no field. The pair and the level are
-   data in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`), the module that already holds the binding
+   What the decision settles: the pair, the level, and the fact that it takes no field of its own. The pair and the
+   level are data in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`), the module that already holds the binding
    decision as data (`RULE_DECISION`), owns the block shape and the row shape, and defines no unit rule and no
-   naming rule, so a data constant there adds no row field and moves no committed data file. `unit_manifest.py` is
-   not the owner yet, because its row shape is what decision 2 decides, and the pair has no reader yet for the
-   same reason. Pinned by
+   naming rule, so a data constant there adds no row field and moves no committed data file. Decision 2 names
+   `unit_manifest.py` as the owner of the field, so `unit_manifest.parse_rows` is the reader that uses the pair, and
+   this module states no field, no reader and no shape rule of its own. Pinned by
    `tests/test_import_blocks.py::test_the_two_mode_values_are_data_read_through_the_owner`,
    `tests/test_import_blocks.py::test_the_mode_level_is_the_unit_the_one_unit_rule_answers`,
-   `tests/test_import_blocks.py::test_no_row_shape_names_a_field_for_the_mode`, and
+   `tests/test_import_blocks.py::test_the_field_name_and_the_pair_are_each_stated_once_in_their_owner`, and
    `tests/test_import_blocks.py::test_the_mode_data_adds_no_unit_rule_and_no_mode_rule_to_the_owner`.
 
-   What the decision does not settle: the mode's owner as a record field, and the value a run with no mode prints,
-   which are decision 2, with the cost fact 11 names. Piece 14A.2 stays blocked on that decision.
+   What the decision did not settle, and decision 2 settled on 2026-11-25: the owner as a record field, and the
+   answer a run with no mode prints. Piece 14A.2 landed that half.
 
-2. **The mode's owner.** The manifest row is the record that names each unit and holds the unit facts, so the
-   unit mode is a manifest field: `unit_manifest.parse_rows` reads it, `codebase_state.py` rule 2 merges it,
-   and the `data_files` gate rule reads it, so no second shape rule or second reader appears. Fact 11 states
-   the cost: the field moves the committed rows. Decision needed: the value that a run with no mode prints, so
-   the empty answer is stated once — either the field carries an empty value for an unmarked unit, or the mode
-   is not a record field and a run states it only in its report. A run that declares no mode writes the same
-   bytes as today only under the second shape, which is the F5.5 and F6.4 opt-in precedent.
+2. **The mode's owner. Taken 2026-11-25: the mode is a field of the unit-manifest row.** The manifest row is the
+   record that names each unit and holds the unit facts, so the field is stated in `unit_manifest.py`, read through
+   its `parse_rows`, merged through `codebase_state.py` rule 2, and read by the `data_files` gate rule, so no second
+   shape rule and no second reader appears. `codebase_state.py` names no field and states no value set, because rule
+   2 takes the whole row through the reader its owner states, and the gate reports a row its reader refuses as its
+   finding 1, so the gate states no value set either.
+
+   The two halves sit in two owners, and the reason: the pair is decision 1's data and stays in
+   `import_blocks.MODE_VALUES`, so `unit_manifest.py` states the field and reads the pair through that owner instead
+   of naming the values a second time. The answer for a unit the run did not mark is stated once, in
+   `unit_manifest.py` as `EMPTY_ANSWER`, in the style of `provenance.py` rule 1, which prints `-` for a field that
+   does not apply: inside a JSON row the same answer is the empty string, and `build_rows` already writes it for a
+   field the unit does not state. Decision 3 is untaken, so no argument declares a mode and every row a run writes
+   states the answer for a unit the run did not mark.
+
+   The field prints after `unit`, because `MODE_LEVEL` names the unit as the level the values apply to and `unit` is
+   the field that states that level on the row. Fact 11 names what moves: no committed golden byte, because no
+   committed data file exists, and the pins that state the row shape as a list. Pinned by
+   `tests/test_unit_manifest.py::test_the_mode_field_reads_back_as_a_value_of_the_pair_through_its_owner`,
+   `tests/test_codebase_state.py::test_the_merge_carries_the_mode_as_the_record_states_it`,
+   `tests/test_data_file_gate.py::test_a_mode_that_is_not_a_value_of_the_pair_is_a_finding_through_the_reader`,
+   `tests/test_import_blocks.py::test_the_field_name_and_the_pair_are_each_stated_once_in_their_owner`, and the
+   three pins fact 11 names.
 
 3. **The declaration rule.** A mode is declared by an argument that names scopes, read through
    `container_coverage.is_scope_path` and `SCOPE_PATH_ROOTS`, the one scope-path definition, so a mode names

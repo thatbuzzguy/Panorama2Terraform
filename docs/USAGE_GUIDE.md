@@ -379,13 +379,14 @@ sha256: 9b1c...
 
 `CODEBASE_MANIFEST.json` is one row per unit, where a unit is one combination of the five scope
 facts. It is written as data, in identity order, so a tool reads it and a document does not
-restate a row. Eleven fields, in this order: `unit`, `device_group`, `vsys`, `template`,
+restate a row. Twelve fields, in this order: `unit`, `mode`, `device_group`, `vsys`, `template`,
 `vsys_device`, `template_stack`, `directory`, `entry_count`, `references`, `rank`, `after`.
 
 ```json
 [
   {
     "unit": "Production-DG",
+    "mode": "",
     "device_group": "Production-DG",
     "vsys": "",
     "template": "",
@@ -406,6 +407,9 @@ restate a row. Eleven fields, in this order: `unit`, `device_group`, `vsys`, `te
   names no firewall, so the scope above it names the unit. The entry that defines a template stack
   names its own unit (F6.10.5), so a unit named for a stack holds the stack entry and the entries
   inside it.
+- `mode` states the plan outcome for the unit. The two values are data in `import_blocks.py`, and `parse_rows`
+  reads them through that owner, so this guide names no values of its own. A run that declares no mode writes the
+  empty value for a unit it did not mark, because no argument declares a mode yet.
 - `directory` is the sanitized unit name plus the 8-hex digest of the unit identity. The digest is
   always in the name, so a name does not move when an unrelated scope is added. F6.1 names the
   directory; it does not write one.

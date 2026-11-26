@@ -39,6 +39,7 @@ import unit_manifest
 from conftest import (
     FIXTURES_DIR,
     GOLDEN_DIR,
+    MODE_VALUES,
     SAMPLE_CONFIG,
     SRC_DIR,
     corpus_fixtures,
@@ -385,18 +386,20 @@ def test_the_opt_in_appears_in_help_and_defaults_off(tmp_path):
     assert not parts(tf_files(tmp_path), IMPORTS)
 
 
-# --- 8. The mode as data, at the unit (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) ---
+# --- 8. The mode as data at the unit, and the field decision 2 names (`docs/IMPORT_BINDING.md` §2) ---
 
 
 def test_the_two_mode_values_are_data_read_through_the_owner():
     """Decision 1 takes two values, so the pin reads them as data through the owner the decision names,
-    `src/import_blocks.py`, and not through the wording of `docs/IMPORT_BINDING.md`.
+    `src/import_blocks.py`, and not through the wording of `docs/IMPORT_BINDING.md`. Four test modules read the pair,
+    so `tests/conftest.py` holds the one definition, and that definition reads through this module.
 
     Measured 2026-11-25 on the tree that holds the decision: the pair is `imported` and `added`, the plan
     outcome for one unit, and it has two members, so a third value moves this pin with the decision.
     """
-    assert import_blocks.MODE_VALUES == ("imported", "added")
-    assert len(import_blocks.MODE_VALUES) == 2, "the decision takes two values, so the pair has two members"
+    assert MODE_VALUES == ("imported", "added")
+    assert len(MODE_VALUES) == 2, "the decision takes two values, so the pair has two members"
+    assert MODE_VALUES is import_blocks.MODE_VALUES, "the shared definition reads through the owner and copies nothing"
 
 
 def test_the_mode_level_is_the_unit_the_one_unit_rule_answers(tmp_path):
@@ -420,32 +423,39 @@ def test_the_mode_level_is_the_unit_the_one_unit_rule_answers(tmp_path):
         assert row[level] == unit_manifest.unit_name(unit_manifest.facts_of(row)), row
 
 
-def test_no_row_shape_names_a_field_for_the_mode(tmp_path):
-    """Decision 1 takes no field, so the mode is data no row carries. Each shape is read through the module that
-    owns it, and none names a field for the mode, so a run writes no key for it and the decision moves nothing
-    committed. The entry level is the level `OWNERSHIP.json` keys on, so an entry-level mode would need a field on
-    that row; the data names one level only, the unit, so no entry level enters a shape.
+def test_the_field_name_and_the_pair_are_each_stated_once_in_their_owner(tmp_path):
+    """Decision 2 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25): the field name is in the shape `unit_manifest.py`
+    owns, and the two values stay in this module, the owner decision 1 names, so each is stated once. The other
+    shapes name no field for the mode, and this module defines no field name of its own.
 
     Measured 2026-11-25 on `SAMPLE_CONFIG` run through the pipeline, with each row read back through its module's
-    `parse_rows`, so this pin states no shape of its own.
+    `parse_rows`, so this pin states no shape of its own. No argument declares a mode yet (decision 3), so every
+    manifest row states the answer for a unit the run did not mark, read through its owner.
     """
     shapes = {
-        "import_blocks": import_blocks.IMPORT_ROW_FIELDS,
         "unit_manifest": unit_manifest.FIELD_ORDER,
         "ownership": ownership.FIELD_ORDER,
         "reference_edges": reference_edges.FIELD_ORDER,
         "rule_data": rule_data.RULE_ROW_FIELDS,
         "site_data": site_data.SITE_ROW_FIELDS,
     }
+    assert "mode" in shapes["unit_manifest"], "the field is in the shape its owner states"
     for name, shape in shapes.items():
-        assert "mode" not in shape, (name, "the shape states no field for the mode")
+        if name != "unit_manifest":
+            assert "mode" not in shape, (name, "the shape states no field for the mode")
+    assert "mode" not in import_blocks.IMPORT_ROW_FIELDS, "the block row shape names no field for the mode"
+    assert not hasattr(import_blocks, "MODE_FIELD"), "this module states no field name for the mode"
+    assert not hasattr(unit_manifest, "MODE_VALUES"), "the reader reads the pair through its owner"
     out = tmp_path / "run"
     assert _run(SAMPLE_CONFIG, out, ("--import-blocks",)).returncode == 0
     rows = record_rows(out)
     assert any(rows.values()), "the pin reads a record with content"
     for record_module, record in rows.items():
         for row in record:
-            assert "mode" not in row, (record_module.__name__, row)
+            if record_module is unit_manifest:
+                assert row["mode"] == unit_manifest.EMPTY_ANSWER, (record_module.__name__, row)
+            else:
+                assert "mode" not in row, (record_module.__name__, "no other record holds the mode")
     assert import_blocks.MODE_LEVEL not in ownership.FIELD_ORDER, "the entry level is not the mode's level"
 
 

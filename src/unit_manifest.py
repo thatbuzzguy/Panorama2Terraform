@@ -22,7 +22,13 @@ stated once here.
    order, the reference names are sorted, and no field states a timestamp or a path, so two runs
    on the same bytes write the same bytes. `parse_rows` reads a written file back, and a row that
    is not the declared shape is a refusal, the way `provenance.parse_record` refuses a line that
-   is not a field.
+   is not a field. `mode` is the plan outcome decision 1 names for one unit, and decision 2
+   (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) makes it a field of this row. The two values are
+   read through `import_blocks.MODE_VALUES`, the module that holds them as data, so this module states
+   the field and not the pair. A unit the run did not mark prints the empty answer, stated once here
+   as `EMPTY_ANSWER`, the way `provenance.py` rule 1 states `-` for a field that does not apply, so a
+   run that declares no mode still writes the declared shape. `parse_rows` refuses a mode that is not a
+   value of the pair or the empty answer.
 4. One file per codebase. A reader cannot find a per-unit file before it knows the directory
    name, and the directory name is the fact this module decides. The set of units is a run fact, and
    the edge list (F6.3) needs the whole set, so one file holds one row per unit. The file is written
@@ -51,8 +57,11 @@ module takes it as an argument and defines no second rule.
 
 The gate rule `data_files` (F6.8, `ARCHITECTURE.md` §4.6) reads the written file back through `parse_rows`
 here, so no second shape rule appears, and reports a `unit` or `directory` that is not the name the rules
-above state, or a `rank` and `after` that are not what the order rule produces. Pinned by
-`tests/test_unit_manifest.py::test_the_gate_reads_the_manifest_through_unit_manifest`.
+above state, or a `rank` and `after` that are not what the order rule produces. A row whose `mode` is not a
+value of the pair or the empty answer reaches the gate as its finding 1 through this module, because the gate
+reads the row through `parse_rows` and states no value set of its own. Pinned by
+`tests/test_unit_manifest.py::test_the_gate_reads_the_manifest_through_unit_manifest` and
+`tests/test_data_file_gate.py::test_a_mode_that_is_not_a_value_of_the_pair_is_a_finding_through_the_reader`.
 
 Usage:
     from unit_manifest import MANIFEST_FILE, build_rows, render, parse_rows
@@ -61,7 +70,7 @@ Usage:
     rows = reference_edges.order(rows, ownership_rows, edge_rows)    # rule 5: fills rank and after
     write_file(root_path(output_dir, MANIFEST_FILE), render(rows))
     for row in parse_rows((output_dir / MANIFEST_FILE).read_text(encoding='utf-8')):
-        print(row['directory'], row['rank'], row['after'])
+        print(row['directory'], row['mode'], row['rank'], row['after'])
     units(ledger)                    # the run's unit set, read through this rule (rule 4)
     units(parse_rows(text))          # the codebase's unit set, the same rule over the rows read back
 """
@@ -71,15 +80,19 @@ import json
 from collections.abc import Callable
 
 import container_coverage
+import import_blocks
 from naming import UNNAMED
 
 MANIFEST_FILE = "CODEBASE_MANIFEST.json"
 
 # Field order. Fixed, so two runs write the same bytes and a reader does not guess.
 # The field names are the printed keys, so `parse_rows` reads a row back as itself.
+# `mode` prints next to `unit`, because `import_blocks.MODE_LEVEL` names the unit as the level the
+# values apply to and `unit` is the field that states that level on the row.
 # `rank` and `after` are the unit order (rule 5), so they print after the F6.1 fields.
 FIELD_ORDER = (
     "unit",
+    "mode",
     "device_group",
     "vsys",
     "template",
@@ -112,6 +125,13 @@ SHARED_UNIT = "Shared"
 
 # A name that sanitizes to nothing is `naming.UNNAMED`, the one definition of the §5 fallback (rule 2),
 # read through the import above, so this module states no second copy of the word.
+
+# The answer for a field the unit does not state, and the answer a run writes for the mode of a unit it
+# did not mark, because no argument declares a mode yet (`docs/IMPORT_BINDING.md` §2, decision 3). This is the
+# one place the empty answer is stated: `build_rows` writes it and `parse_rows` accepts it, so a run that
+# declares no mode writes the declared shape. The style is `provenance.py` rule 1, which prints `-` for a
+# field that does not apply; inside a JSON row the same answer is the empty string.
+EMPTY_ANSWER = ""
 
 
 def facts_of(obj: dict) -> tuple:
@@ -196,7 +216,9 @@ def build_rows(ledger, references: dict, sanitize: Callable[[str], str]) -> list
 
     rows = []
     for facts in units(ledger):  # rule 1: the unit set is read through this one rule
-        row = dict.fromkeys(FIELD_ORDER, "")
+        row = dict.fromkeys(FIELD_ORDER, EMPTY_ANSWER)
+        # `mode` is written as the empty answer here, because no argument declares a mode yet (decision 3),
+        # so a run marks no unit and every row states the answer for a unit the run did not mark.
         # `facts` is a row read through `facts_of`, which reads it through FACT_KEYS, so the two sides are
         # the same set. `strict` states that, so a row with a fact missing cannot write a short row.
         row.update(zip(FACT_KEYS, facts, strict=True))
@@ -248,6 +270,10 @@ def parse_rows(text: str) -> list:
             raise ValueError(f"the name fields of a row are not names: {row}")
         if not isinstance(row["entry_count"], int):
             raise ValueError(f"entry_count is not a count: {row}")
+        # The pair is read through its owner, so this reader states no value set of its own, and the
+        # empty answer is the one answer stated here (rule 3).
+        if row["mode"] not in (*import_blocks.MODE_VALUES, EMPTY_ANSWER):
+            raise ValueError(f"mode is not a value of the pair or the empty answer: {row}")
         if not isinstance(row["references"], list) or not all(isinstance(name, str) for name in row["references"]):
             raise ValueError(f"references is not a list of names: {row}")
         if not isinstance(row["rank"], int):

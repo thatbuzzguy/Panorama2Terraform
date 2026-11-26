@@ -795,10 +795,14 @@ The rule lives in `unit_manifest.py`, and it holds six facts:
   shape. The digest is always present, not only on a collision, so a name never depends on the
   other units in the run. The module takes the §5 rule as an argument, so it defines no second
   naming rule. It names the directory, and the write path (§6) writes the directory it names.
-- **The row shape.** `unit`, `device_group`, `vsys`, `template`, `vsys_device`, `template_stack`,
+- **The row shape.** `unit`, `mode`, `device_group`, `vsys`, `template`, `vsys_device`, `template_stack`,
   `directory`, `entry_count`, `references`. Fields print in the declared order, the rows sort by
   the identity, and the reference names are sorted. `parse_rows` reads a written file back, and a row that is
-  not the declared shape is a refusal, the way `parse_record` refuses a line (§3.3 rule).
+  not the declared shape is a refusal, the way `parse_record` refuses a line (§3.3 rule). `mode` is the field
+  decision 2 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) names, and its two values are read through
+  `import_blocks.MODE_VALUES`, so this module states the field and not the pair. A unit the run did not mark
+  prints the answer stated once here as `EMPTY_ANSWER`, the way rule 1 of §3.3 prints `-` for a field that does
+  not apply, so `parse_rows` refuses a mode that is not a value of the pair or that answer.
 - **One file per codebase run.** The edge list needs the whole set of units, so one file holds one
   row per unit. A manifest row for a unit with no ledger row adds nothing, so every recorded name
   belongs to a unit the ledger shows.

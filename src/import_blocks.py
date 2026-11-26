@@ -32,12 +32,12 @@ An import block binds a resource block to the object the provider already has. S
    directory, then by local name, which a reader can reproduce from the file. No row states a timestamp or a
    path. The file is written only when it has content, following the rule for the report files and the three
    data files.
-7. **The mode values as data, at the unit.** Decision 1 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) takes
-   two values and one level, and this module holds them as data (`MODE_LEVEL`, `MODE_VALUES`) because the
-   decision takes no field: the field, and the value a run with no mode prints, are decision 2, which is
-   untaken, so no row shape gains one and no committed data file moves. The unit is read through
-   `unit_manifest.units`, the one unit rule, so this module states no unit rule, no level rule and no mode
-   reader of its own. Pinned by `tests/test_import_blocks.py` group 8.
+7. **The mode values as data, at the unit.** Decision 1 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25) takes two
+   values and one level, and this module holds them as data (`MODE_LEVEL`, `MODE_VALUES`) and no field. Decision 2
+   (taken 2026-11-25) names `unit_manifest.py` as the owner of the row field, so `unit_manifest.parse_rows` is the
+   reader that uses the pair, and the answer for a unit the run did not mark is stated in that module. The unit is
+   read through `unit_manifest.units`, the one unit rule, so this module states no unit rule, no level rule, no
+   reader, no field name and no mode rule of its own. Pinned by `tests/test_import_blocks.py` group 8.
 
 Usage:
     from import_blocks import IMPORT_FILE, IMPORT_ROW_FIELDS, build_id, decode_id, read_block, render, row
@@ -70,8 +70,9 @@ RULE_DECISION = (
 # naming the plan outcome for one unit, so the data names the plan outcome and not a file or a path. `MODE_LEVEL`
 # is the level the values apply to, and it is the unit identity name `unit_manifest.py` states on its row, read
 # through `unit_manifest.units`; it is not one of the five scope facts, so the mode needs no new level and no
-# entry level. The decision takes no field, so nothing here enters a row shape: no reader uses the pair yet,
-# because the field and the value a run with no mode prints are decision 2, so no committed data file moves.
+# entry level. Decision 2 (taken 2026-11-25) names `unit_manifest.py` as the owner of the row field, so nothing here
+# enters a shape: `unit_manifest.parse_rows` reads the pair through these values, and the answer for a unit the run
+# did not mark is stated in that module, so no committed data file moves.
 MODE_LEVEL = "unit"
 MODE_VALUES = ("imported", "added")
 

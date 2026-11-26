@@ -50,6 +50,7 @@ import write_path
 from conftest import (
     CODEBASE_FIXTURE,
     FIXTURES_DIR,
+    MODE_VALUES,
     RULE_TYPES,
     RUN_FIXTURE,
     SAMPLE_CONFIG,
@@ -367,6 +368,34 @@ def test_a_data_file_that_does_not_read_as_its_rows_is_reported(tmp_path):
     (tmp_path / unit_manifest.MANIFEST_FILE).write_text("[" + json.dumps(broken) + "]", encoding="utf-8")
     findings = sanity_checks.check_data_files(tmp_path)
     assert "does not state its fields" in findings[0].detail, findings[0].render()
+
+
+def test_a_mode_that_is_not_a_value_of_the_pair_is_a_finding_through_the_reader(tmp_path):
+    """Decision 2 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25): the gate reads the mode through
+    `unit_manifest.parse_rows`, so a mode outside the pair reaches the rule as its finding 1, and the rule states no
+    value set of its own. A row that states a value of the pair, and the answer for a unit the run did not mark,
+    reads as no finding.
+
+    Measured 2026-11-25 on a record written through `render` and read back through `parse_rows`, so the pin reads
+    the rule's answer for the file and not the wording of the decision.
+    """
+    row = _manifest_row(SHARED)
+    assert row["mode"] == unit_manifest.EMPTY_ANSWER, row
+    assert _write(tmp_path, unit_manifest.MANIFEST_FILE, unit_manifest, [row]) == []
+    for value in MODE_VALUES:
+        assert _write(tmp_path, unit_manifest.MANIFEST_FILE, unit_manifest, [dict(row, mode=value)]) == []
+    findings = _for_file(
+        _write(tmp_path, unit_manifest.MANIFEST_FILE, unit_manifest, [dict(row, mode="bound")]),
+        unit_manifest.MANIFEST_FILE,
+    )
+    assert len(findings) == 1, [f.render() for f in findings]
+    assert "value of the pair" in findings[0].detail, findings[0].render()
+    assert findings[0].severity == sanity_checks.FAIL
+    # The rule reads the row through its module, so the value set stays in the pair's owner and the gate names
+    # no value and no field of its own.
+    source = Path(sanity_checks.__file__).read_text(encoding="utf-8")
+    rule = source[source.index("def check_data_files") : source.index("def check_round_trip")]
+    assert "mode" not in rule, "the data rule states no value set and no field name of its own"
 
 
 def test_a_data_file_with_no_rows_is_a_finding(tmp_path):

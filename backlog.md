@@ -305,20 +305,14 @@ rules in the four owner documents, 719 `§` cross-references, 273 test-name clai
   read a source read a `src/` module source, so a change inside a test module cannot trip them. Owners:
   `tests/conftest.py` and `docs/MULTI_RUN_CODEBASE.md` §5 rule 1.
 
-- **The mode values have no reader, so the pins read the constants directly.** Measured 2026-11-25:
-  `src/import_blocks.py` holds the pair and the level as data (`MODE_VALUES`, `MODE_LEVEL`) for decision 1, taken
-  that day, and no run reads them, because decision 2 names no field and decision 3 names no argument. So the pins
-  that hold decision 1 read the constants as data and read the row shapes through their owners, and the data reaches
-  no output. The half of Piece 14A.1 that would have stated the mode as a record field stays blocked on decision 2
-  and fact 11: a field there moves `unit_manifest.FIELD_ORDER`, the pins that read a row shape as data
-  (`tests/test_unit_manifest.py::test_the_row_fields_are_the_declared_shape_in_order`) and the report counts that
-  read the record back. Owners: `src/import_blocks.py`, `docs/IMPORT_BINDING.md` §2 decision 1, and
-  `tests/test_import_blocks.py` group 8.
-  - Fact 11 says the golden data files move with a mode field. Measured 2026-11-25: the committed goldens hold no
-    data file, so the set the document calls the golden data files is the pins that read each record as data
-    through its module, and no committed byte of data moves today. The fact is correct for a run that writes a
-    record, and the sentence should say which pins it means; the document-review finding is open until the next
-    piece that takes decision 2 names them.
+- **The mode field has no declaration rule, so no run marks a unit.** Measured 2026-11-25: the pair and the level are
+  data in `src/import_blocks.py` (`MODE_VALUES`, `MODE_LEVEL`) for decision 1, the field is data in
+  `src/unit_manifest.py` for decision 2, taken that day, and `unit_manifest.parse_rows` is the reader that uses the
+  pair. Decision 3 is untaken, so no argument declares a mode, so every row a run writes states the answer for a unit
+  the run did not mark, and a mode value reaches a record only through a row a person writes by hand. The pins read the
+  pair through `tests/conftest.py`, the one definition the four modules read, and read the empty answer through
+  `unit_manifest`, its owner, so no test module holds a copy. Owners: `src/import_blocks.py`,
+  `docs/IMPORT_BINDING.md` §2 decision 3, `src/unit_manifest.py`, and `tests/test_import_blocks.py` group 8.
 
 - **The operator file has no owner constant, so the pin states its name.** `docs/CODEBASE_ASSEMBLY.md` §11 states the
   rule in prose and `src/site_data.py` owns only the printed form's name, so a pin that places an operator file in the

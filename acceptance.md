@@ -5,70 +5,64 @@ piece at `077cdce`, so their records live in the git history and are not restate
 pointers: Epic 13's rules are in `docs/INPUT_SHAPES.md`, and Epic 14's criteria are not restated here because that
 epic still has open pieces in `to-do.md` and its decisions are in `docs/IMPORT_BINDING.md` §2.
 
-## Piece 14A.1, the two mode values and the level the mode sits at (main, the current task)
+## Piece 14A.2, the mode as a manifest row field (main, the current task)
 
-Decision 1 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-25: the mode stops at the unit, and the two values each
-name the plan outcome for one unit. One goal: record the decision as taken, and state the pair and the level as data
-with the pins that read them as data. Decision 2 is untaken, so the piece states no record field, moves no row
-shape, and moves no committed byte of data.
+Decision 2 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-25 by the operator: the mode is a field of the unit-manifest
+row, read through `unit_manifest.parse_rows`, merged through `MULTI_RUN_CODEBASE.md` §2 rule 2, and read by the
+`data_files` gate rule. One goal: record the decision as taken, land the field as data in the owner the decision
+names, and add the pins that read it as data through that owner. Decision 3 is untaken, so the piece states no CLI
+argument and no flag, so no run marks a mode: every row writes the answer a unit that states no mode has.
 
 ### Criteria
 
-1. `docs/IMPORT_BINDING.md` §2 decision 1 records the decision as taken, with the date 2026-11-25, the facts it
-   settles (the pair, the level, and that the decision takes no field), the module it names as the owner of the
-   data, and the pins that hold it named. The §2 line that states no decision is taken is changed so that decision
-   1 is named as taken and the rest stay untaken.
-2. Decision 2 stays untaken. The piece states no record field for the mode, does not change
-   `unit_manifest.FIELD_ORDER` or any other row shape, and moves no committed data file and no golden. The value a
-   run with no mode prints is not guessed here.
-3. The pair and the level are data in `src/import_blocks.py`, the owner decision 1 names, for these reasons: that
-   module already holds the binding decision as data (`RULE_DECISION`), owns the block shape and the row shape, and
-   defines no unit rule and no naming rule, so a data constant there adds no row field and moves no committed byte.
-   `unit_manifest.py` is not the owner, because its row shape is what decision 2 decides. The choice is stated in
-   the module comment and in `docs/README.md` §Who owns each rule.
-4. The pins read the pair and the level as data through the owner, and not through document wording. They hold:
-   the pair has two members and reads as `imported` and `added`; the level is the unit identity the one unit rule
-   answers, so it is the unit field the manifest row states and not one of the five scope facts, and no entry level
-   is named; no row shape names a field for the mode, so a run writes no key for it; and the owner states no unit
-   rule, no level rule and no mode reader of its own, and no module holds the pair or the level a second time.
-5. The pins run the pipeline in process and read each row shape through the module that owns it, so no test module
-   states a shape rule, a unit rule or a file set of its own, and no test module imports another test module
-   (`docs/ARCHITECTURE.md` §1.1).
-6. No document restates the data. `docs/README.md` names the owner, and `docs/IMPORT_BINDING.md` names the owner
-   and the pins. A pin measures content or a name, so a wording check stays in `tools/check_documents.py`, which the
-   test set does not read.
-7. ASD-STE100, no marketing voice, no emoji, and no test count in a document.
-8. The gate is measured single-threaded: `ruff check .`, `ruff format --check .`,
-   `python3 tools/check_documents.py`, and `python3 -m pytest -p no:cacheprovider` in one process with no parallel
-   plugin. The answer must agree with the baseline the piece starts from: 1,861 pins in 55 test modules (1,857
-   passed and the same 4 `tflint` skips). This piece adds 4 pins in `tests/test_import_blocks.py`, so the expected
-   answer is 1,865 pins in 55 test modules, and the file count the format check reads cannot move because no file
-   is added. Every count that moves is recorded.
-9. The tracking markdown is updated: `agent-status.md` Current position for this piece, `to-do.md` for the piece,
-   and `backlog.md` for the half that stays blocked on decision 2 and fact 11 and for the pair that has no reader
-   yet. The two open process-debt pieces stay open, and all the untaken Epic 14 decisions stay. Piece 14A.2 stays
-   blocked on decision 2 and fact 11.
-10. The piece is committed in the conventional-commits style with the completion history in the body, in the shape
-    of `git log -1 --format=%B`, as `commit.md` states. Nothing is pushed. If the data cannot be placed without a
-    row shape moving, the reason is recorded in `backlog.md` instead of being guessed.
-
-### Out of scope
-
-- Decision 2, the mode's owner as a record field and the value a run with no mode prints. Decision 3, the
-  declaration argument. The report section that names the units a run bound. The rule types (decision 7). The
-  whole-block fact (decision 4). The completeness half (decision 5). The device fact, the read-through order and
-  permanence. No piece that needs an untaken decision is written.
-- No `src/` module is added, so `tools/check_documents.py` check 3 reads the same `src/` module count the document
-  names, and no golden, no fixture and no `docs/LICENSING.md` count changes.
-- No gate rule, no report rule and no writer changes: the mode has no reader until decision 2 or decision 3 lands.
+1. `docs/IMPORT_BINDING.md` §2 decision 2 records the decision as taken with the date, the owner it names
+   (`unit_manifest.py`), the reader it names (`parse_rows`), the merge rule it reads through (`codebase_state.py`
+   rule 2), the gate rule that reads it, and the empty answer for a unit the run did not mark, stated once, in the
+   style of `provenance.py` rule 1. Decision 1 keeps what it settled (the pair, the level, and that it takes no
+   field of its own) and its pin claims name the names the modules define after the rename.
+2. Fact 11 states what actually moves: `tests/golden` holds no data file, so no committed golden byte moves; the
+   pins that read the row shape state the shape, so they move in the same commit as the field. The pins named are
+   `tests/test_unit_manifest.py::test_the_row_fields_are_the_declared_shape_in_order`,
+   `::test_the_row_states_placement_through_the_fact_keys_it_already_reads`,
+   `::test_a_row_that_is_not_the_declared_shape_is_refused` and `tests/test_data_file_gate.py::_manifest_row`.
+3. The value pair is stated once, in `src/import_blocks.py` (`MODE_VALUES`, decision 1), and `unit_manifest.py`
+   reads it through that owner instead of naming the values a second time. The empty answer is stated once, in
+   `unit_manifest.py`, because that is the module that writes the row. If the field and the values are read through
+   two different owners, the piece says which one and why. `tests/conftest.py` holds the pair as one definition read
+   through its owner, because more than one test module reads it.
+4. `src/unit_manifest.py` lands the field: `mode` enters `FIELD_ORDER` in the position the piece states with the
+   reason, `build_rows` writes the empty answer for every unit, and `parse_rows` refuses a mode that is not a value
+   of the pair or the empty answer, which the `data_files` gate rule reports as its finding 1 through
+   `unit_manifest`. `src/import_blocks.py` states no field of its own and keeps the pair and the level as data.
+5. `src/codebase_state.py` changes no code: rule 2 takes the whole row, so the merge carries the field with no key,
+   shape or reader of its own. Only pins read it.
+6. Pins that read the field as data through its owner: one in `tests/test_unit_manifest.py` (a row that states a
+   value of the pair reads back as itself, and a mode outside the pair is refused), one in
+   `tests/test_data_file_gate.py` (the gate reports a mode outside the pair as its finding 1 through
+   `unit_manifest`, and a clean row with a mode reads as no finding), one in `tests/test_codebase_state.py` (the
+   merged row carries the field and reads back as itself, and a row the second run did not build keeps the mode the
+   record stated), and `tests/test_import_blocks.py` group 8 moves from "no shape names a field for the mode" to the
+   shape that does, read through the pair's owner. Pins measure content or names, never document wording.
+7. Documents that state the row shape move in the same commit: `docs/ARCHITECTURE.md` §3.4,
+   `docs/CODEBASE_ASSEMBLY.md` §3 rule 4, the `docs/README.md` index line for Epic 14, and
+   `docs/USAGE_GUIDE.md` §The unit manifest, which lists the fields and shows one row. `src/import_blocks.py` rule 7
+   names `unit_manifest.parse_rows` as the reader of the pair.
+8. Every count that moves is recorded, including whether any committed golden byte moves, measured against the
+   baseline commit `723607b`: 1,865 pins in 55 test modules, 1,861 passed, the same 4 `tflint` skips, `ruff check .`
+   and `ruff format --check .` clean on 113 files, `python3 tools/check_documents.py` with no finding. The gate runs
+   single-threaded in one process with no parallel plugin: `ruff check .`, `ruff format --check .`,
+   `python3 tools/check_documents.py`, `python3 -m pytest -p no:cacheprovider`. No document states a test count.
+9. Out of scope for this piece: the declaration rule (decision 3, so no CLI argument and no flag), the report
+   section (Piece 14A.4), the rule types (decision 7), the device fact (decision 6), the whole-block fact
+   (decision 4), the completeness half (decision 5), the read-through order (decision 8), and permanence
+   (decision 9). A mode value that no run can declare yet stays data that a hand-written record can state.
+10. Standard library only, ASD-STE100 sentences, no marketing voice, no emoji. `agent-status.md`, `to-do.md` and
+    `backlog.md` are updated, and the change is committed in conventional-commits style with the completion history
+    in the body. Nothing is pushed.
 
 ### Definition of done
 
-Decision 1 is recorded as taken in `docs/IMPORT_BINDING.md` §2 with the date, the facts it settles, the owner it
-names and the pins named. The pair and the level are data in `src/import_blocks.py`, and the pins read them as data
-and hold that no module states a record field for the mode, a second unit rule or a second level. No row shape and
-no committed data file moves. The gate answers with no finding: `ruff check .` clean, `ruff format --check .` clean
-on the same 113 files, `python3 tools/check_documents.py` reports no finding, and
-`python3 -m pytest -p no:cacheprovider` in one process with no parallel plugin exits 0 with 1,865 pins in 55 test
-modules. Every count that moves is recorded here, the tracking markdown is updated, and the piece is committed in
-the conventional-commits style with the completion history in the body. Nothing is pushed.
+The decision is recorded as taken, the field is data in the owner decision 2 names, the values are stated once and
+read through that owner, the empty answer is stated once, the merge and the gate read the field with no rule of
+their own, the pins that read it as data pass, every pin that states the row shape moved in the same commit, every
+count that moves is recorded, and the document checks report no finding.

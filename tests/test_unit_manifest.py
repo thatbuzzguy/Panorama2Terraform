@@ -12,7 +12,8 @@ the two unit sets Piece 11B.2 states (`docs/MULTI_RUN_CODEBASE.md` §2 rule 5) a
    stated once, in `naming.py`, so no module holds a second definition of it.
 3. The row shape. Fixed fields in the declared order, rows in identity order, read back as data. The
    row states the scope a unit sits in through the five fact keys, so it names no field for a place, and
-   no row carries two container facts.
+   no row carries two container facts. The row also states the mode as the field decision 2 names, read as
+   data through `MODE_VALUES`, the pair `import_blocks.py` owns.
 4. The reference names, recorded by `name_ref` at the site that applies the reference rule.
 5. The no-change rule. The `.tf` bytes, the report bytes, the gate inputs, and the exit codes.
 6. The CLI, and the rule that a file is written only when it has content.
@@ -50,6 +51,7 @@ from conftest import (
     CODEBASE_FIXTURE,
     FIXTURES_DIR,
     GOLDEN_DIR,
+    MODE_VALUES,
     RESOURCE_ADDRESS_RE,
     RESPONSES_DIR,
     RUN_FIXTURE,
@@ -460,6 +462,7 @@ def test_the_row_fields_are_the_declared_shape_in_order(tmp_path):
     """
     assert unit_manifest.FIELD_ORDER == (
         "unit",
+        "mode",
         "device_group",
         "vsys",
         "template",
@@ -475,7 +478,8 @@ def test_the_row_fields_are_the_declared_shape_in_order(tmp_path):
     text = (tmp_path / MANIFEST).read_text(encoding="utf-8")
     assert list(json.loads(text)[0]) == list(unit_manifest.FIELD_ORDER)
     # Fields print in the declared order, not alphabetically.
-    assert text.index('"unit"') < text.index('"device_group"') < text.index('"directory"')
+    assert text.index('"unit"') < text.index('"mode"') < text.index('"device_group"')
+    assert text.index('"device_group"') < text.index('"directory"')
     # F6.3 rule 5: the two order fields print after the F6.1 fields.
     assert text.index('"references"') < text.index('"rank"') < text.index('"after"')
 
@@ -496,9 +500,11 @@ def test_the_row_states_placement_through_the_fact_keys_it_already_reads(convert
         assert row["device_group"] == "", row
     assert template["template"] == "Edge-Networks" and template["template_stack"] == "", template
     assert stack["template_stack"] == "Edge-Stack" and stack["template"] == "", stack
-    # The declared shape names no field for a place: the fact keys, then the run facts.
+    # The declared shape names no field for a place: the fact keys, then the run facts. `mode` is a run fact,
+    # the field decision 2 names for the plan outcome, so it is in the second list and no fact key holds it.
     assert [field for field in unit_manifest.FIELD_ORDER if field not in unit_manifest.FACT_KEYS] == [
         "unit",
+        "mode",
         "directory",
         "entry_count",
         "references",
@@ -541,6 +547,7 @@ def test_a_row_that_is_not_the_declared_shape_is_refused():
     """The manifest is data, so a reader cannot fall back to reading prose."""
     good = {
         "unit": "Shared",
+        "mode": "",
         "device_group": "",
         "vsys": "",
         "template": "",
@@ -561,12 +568,43 @@ def test_a_row_that_is_not_the_declared_shape_is_refused():
         json.dumps([dict(good, entry_count="2")]),
         json.dumps([dict(good, references="IKE-DEFAULT")]),
         json.dumps([dict(good, vsys=None)]),
+        # Decision 2 (2026-11-25): `mode` is a declared field, so a value outside the pair is a refusal.
+        json.dumps([dict(good, mode="bound")]),
         json.dumps([dict(good, rank="1")]),  # F6.3: rank is a position
         json.dumps([dict(good, after="shared_45ca31c3")]),  # F6.3: after is a list of directories
     )
     for bad in bad_rows:
         with pytest.raises(ValueError):
             unit_manifest.parse_rows(bad)
+
+
+def test_the_mode_field_reads_back_as_a_value_of_the_pair_through_its_owner(tmp_path):
+    """Decision 2 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25): the mode is a field of this row. The two values
+    are data in `import_blocks.py`, the owner decision 1 names, so this module states the field and reads the pair
+    through that owner instead of naming the values a second time. The answer for a unit the run did not mark is
+    stated once here as `EMPTY_ANSWER`, in the style of `provenance.py` rule 1, so one shape reads.
+
+    Measured 2026-11-25 on `SAMPLE_CONFIG` run through the script: no argument declares a mode yet (decision 3), so
+    every row states the answer for a unit the run did not mark. A mode is read as data by writing the row through
+    `render` and reading it back through `parse_rows`: each value of the pair, and the empty answer, reads back as
+    itself, and a value outside the pair is refused.
+    """
+    _run(SAMPLE_CONFIG, tmp_path)
+    rows = _manifest(tmp_path)
+    assert rows, "the pin reads a record with content"
+    for row in rows:
+        assert row["mode"] == unit_manifest.EMPTY_ANSWER, row
+    for value in MODE_VALUES + (unit_manifest.EMPTY_ANSWER,):
+        row = dict(rows[0], mode=value)
+        assert unit_manifest.parse_rows(unit_manifest.render([row]))[0]["mode"] == value, value
+    with pytest.raises(ValueError):
+        unit_manifest.parse_rows(unit_manifest.render([dict(rows[0], mode="bound")]))
+
+    # The field is stated once, in this module, and the values are stated once, in their owner.
+    source = (SRC_DIR / "unit_manifest.py").read_text(encoding="utf-8")
+    assert "import_blocks.MODE_VALUES" in source, "the reader reads the pair through its owner"
+    for value in MODE_VALUES:
+        assert f'"{value}"' not in source, (value, "the reader states a value its owner states")
 
 
 def test_the_manifest_is_one_file_for_the_codebase(tmp_path):

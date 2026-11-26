@@ -40,6 +40,7 @@ from conftest import (
     EXAMPLES_DIR,
     FIXTURES_DIR,
     JOIN_RECORDS,
+    MODE_VALUES,
     RUN_FIXTURE,
     SRC_DIR,
     run_records,
@@ -297,6 +298,36 @@ def test_the_merge_adds_no_field_so_a_merged_row_reads_back_as_itself(tmp_path):
         assert module.parse_rows(module.render(merged)) == merged, module.__name__
 
 
+def test_the_merge_carries_the_mode_as_the_record_states_it(tmp_path):
+    """Decision 2 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25): the mode is a field of the manifest row, so the
+    merge carries it with no field name, no value set, no reader and no shape rule of its own. A merged row is one
+    of the record's rows read through `parse_rows`, so it keeps the mode the record stated.
+
+    Measured 2026-11-25 on the committed pair through `tests/conftest.py`: no argument declares a mode yet
+    (decision 3), so both runs wrote the answer for a unit they did not mark. A mode value is read as data by
+    planting the record through `render` and reading it back through `parse_rows`, so this pin builds no row. The
+    row for a unit the second run did not build keeps the mode the record stated, and the row for the unit it built
+    is the run's own row.
+    """
+    codebase = _rows(CODEBASE_FIXTURE, tmp_path / "codebase")
+    run_rows = _rows(RUN_FIXTURE, tmp_path / "run")
+    assert codebase[unit_manifest] and run_rows[unit_manifest], "both sets read a record with content"
+    for record in (codebase[unit_manifest], run_rows[unit_manifest]):
+        for row in record:
+            assert row["mode"] == unit_manifest.EMPTY_ANSWER, row
+
+    planted = [dict(row, mode=MODE_VALUES[1]) for row in codebase[unit_manifest]]
+    read_back = unit_manifest.parse_rows(unit_manifest.render(planted))
+    assert [row["mode"] for row in read_back] == [MODE_VALUES[1]] * len(read_back), "the field reads back as itself"
+    merged = _merged(unit_manifest, read_back, run_rows[unit_manifest])
+    kept = [row for row in merged if row in read_back]
+    built = [row for row in merged if row in run_rows[unit_manifest]]
+    assert len(kept) == len(read_back) - 1 and len(built) == 1, (len(kept), len(built))
+    assert all(row["mode"] == MODE_VALUES[1] for row in kept), "the merge carried the record's mode"
+    assert built[0]["mode"] == unit_manifest.EMPTY_ANSWER, "the row the run built states its own answer"
+    assert unit_manifest.parse_rows(unit_manifest.render(merged)) == merged, "the merged set reads back as itself"
+
+
 def test_the_order_of_a_merged_set_is_the_order_each_record_states_not_the_order_of_writes(tmp_path):
     """The order is read through each record's own order rule: `unit_manifest.FACT_KEYS` for the manifest,
     `ownership.row_key` for the ownership record, `reference_edges.FIELD_ORDER` for the edge record, and for the site
@@ -376,6 +407,9 @@ def test_the_module_states_no_rule_an_owner_states_and_writes_no_file():
         assert name not in defined, (name, "the module reads this rule through its owner")
     for token in ("CONSOLE_PREFIX", "os.environ", "API_KEY_ENV", "open(", "write_text", "Path(", ".json"):
         assert token not in source, (token, "the module names no file, no writer and no path rule of its own")
+    # Decision 2 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-25): the mode is a field of the manifest row, so the
+    # merge names no field and states no value set. It takes the whole row through the reader its owner states.
+    assert "mode" not in source, "the module states no field name and no value set for the mode"
 
     imported = {alias.name for node in tree.body if isinstance(node, ast.Import) for alias in node.names}
     house = {path.name[:-3] for path in SRC_DIR.glob("*.py")}
