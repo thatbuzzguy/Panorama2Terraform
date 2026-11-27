@@ -61,15 +61,19 @@ group 10, `tests/test_container_coverage.py` group 5, `tests/test_data_file_gate
   module, and the rule that `tests/conftest.py` is the one place the path to each set is built did not move. The item
   is closed, so the record is removed from `backlog.md`, and the names the three modules hold for their own facts are
   recorded there as the part that stays open.
-- **Piece, the gate and CI rules** — open. Needs one owner document named by `docs/README.md`, holding the
-  gate-size decision, the shared test definitions rule, the Python floor rule, the missing-binary skip rule, and the
-  one-owner rule for the tool pins, which `agent-status.md` states with no owner document today. The choice of the
-  name is an open decision that measurement cannot answer, recorded in `backlog.md`.
-- **Piece, the watch list** — open. Needs one owner document named by `docs/README.md`, holding each watched rule
-  with the link to the owner document or module that already states it, and no restatement. The choice of the name
-  is an open decision that measurement cannot answer, recorded in `backlog.md`.
-- Both open pieces are documents only, so the pin they can move is
-  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, the pin that holds the index rule.
+- **Piece, the gate and CI rules** — complete on main, 2026-11-27, and committed, so this piece's record lives in the
+  git history. The name was taken by the operator on 2026-11-27 as `docs/GATE_AND_CI.md`, and that document now holds
+  the gate-size decision, the shared test definitions rule, the Python floor rule, the missing-binary skip rule, and
+  the one-owner rule for the tool pins. It is named by `docs/README.md`, so
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them` reads it, and `agent-status.md` keeps the
+  status, the links and the recorded measurements. The writing rule that a wording check lives in
+  `tools/check_documents.py` is not restated there; the document links to `docs/WRITING_RULES.md` rule 4.
+- **Piece, the watch list** — open, and it runs next. Needs one owner document named by `docs/README.md`, holding each
+  watched rule with the link to the owner document or module that already states it, and no restatement. The name is
+  taken as `docs/WATCHED_RULES.md`, so the piece writes the document under that name.
+- Both pieces are documents only, so the pin they can move is
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, the pin that holds the index rule. The gate
+  and CI piece is complete, so the watch-list piece is the one that can move it.
 
 ## Feature-sized items that stay blocked
 

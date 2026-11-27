@@ -38,6 +38,6 @@ document links to it: `docs/README.md` names this document, and the root index n
 
 ## What these rules do not cover
 
-The gate and CI rules are outside this document, and the shape-table and write-path watch list is outside it. They
-are recorded open in `backlog.md`, with the document each needs. This document states no rule that a run measures;
-it states only what a document may hold.
+The gate and CI rules are outside this document, and the shape-table and write-path watch list is outside it. The gate
+and CI rules have their own owner document, `docs/GATE_AND_CI.md`. The watch list stays recorded open in `backlog.md`,
+with the document it needs. This document states no rule that a run measures; it states only what a document may hold.

@@ -1,113 +1,50 @@
 # Agent Status
 
-## Current position (main, Piece 14B.1, the device serial fact for a bound unit, 2026-11-27)
+## Current position (main, the gate and CI owner document, 2026-11-27)
 
-Piece 14B.1 is complete on main, 2026-11-27, and is not pushed, on top of Piece 14A.4, whose record lives in the git
-history. Decision 6 of `docs/IMPORT_BINDING.md` §2 is taken by the operator on 2026-11-26, and its four answers are
-recorded there: the source is the state document read as a reference source through `state_coverage.py`, the block and
-the id state the same fact through the row `VALUE_VARIABLES` already states, a run that reads no state document
-declares no serial, and a bound unit with an entry that needs a serial and names none is a report-only finding. The
-writing rules are in their owner document `docs/WRITING_RULES.md`, so this file keeps the status and the links and
-states no writing rule of its own. The baseline this piece started from was Piece 14A.4's measurement: 1,891 pins in
-55 test modules.
+This piece is the documents-only process-debt piece, complete on main, 2026-11-27, and committed, so its record lives
+in the git history. The name was taken by the operator on 2026-11-27, and the rules moved from this file to their
+owner document, `docs/GATE_AND_CI.md`, named by `docs/README.md` and by the root index. No `src/` file and no test
+module changed. The writing rules are in their owner document `docs/WRITING_RULES.md`, so this file keeps the status
+and the links and states no writing rule of its own.
 
-- Placement, and the reason. The fact's owner is `src/state_coverage.py` rule 7, which states the fact, the reading
-  rule for which entry needs it, the finding set and the line shape, and states no reader, no path rule, no row shape,
-  no unit rule, no severity rule, no value of the pair and no name list of its own. The module names the value once:
-  `STATE_SERIAL_KEY` is the field `LOCATION_SCHEMA` declares and `STATE_SERIAL_FACT` is the §2.2 fact that field fills
-  through `STATE_SCOPE_KEYS`, so the pair is the mapping rule the module already states rather than a name list,
-  `STATE_SCOPE_KEYS["ngfw"]` is written through `STATE_SERIAL_FACT`, `serial_of` answers the value or the empty answer,
-  and `entry_needs_serial` answers from the location the document holds for the entry through `LOCATION_SCHEMA`, so a
-  `shared` entry needs none and a sub-block the row declares for another fact needs none. The serial is read inside
-  `location`, which `STATE_IDENTITY_KEYS` already keeps out of the property set, so no drift line can compare it and
-  `STATE_IDENTITY_KEYS` gains no key; `unit_manifest.FACT_KEYS` already holds the fact, so it gains no key. The shape
-  table already states `ngfw_device` as a variable, so `VALUE_VARIABLES` gains no row, `decode_id` gains no field
-  because the value rides inside the location object the id already declares, and `sanity_checks.location_agrees` is
-  the one comparison the location rule already uses, so it gained no branch. No new source kind and no new
-  `input_shapes.SHAPE_TABLE` row: the document reaches the run through the door the state read already uses. The
-  report prints the finding in its own section after the drift section and before the unit section, grouped by the F3.9
-  rule, and `generate_conversion_report` gained the `state_source` keyword so the section reads entries through
-  `state_coverage` instead of through the ownership rows; `marked` is read once before the state sections. The fact
-  names an operator action, so it is WARN, the exit code stays with the rules that read the files, and the console
-  keeps the five kinds §3.2 states, so the console-shape pin is unchanged.
-
-- The pins: 10 added and one extended. `tests/test_state_coverage.py` group 9 gained
-  `test_the_serial_is_read_through_the_entry_shape_and_the_one_name`,
-  `test_the_block_and_the_id_state_the_same_fact_through_the_shape_table`,
-  `test_a_run_that_reads_no_state_document_declares_no_serial_and_writes_the_bytes_it_writes_today`,
-  `test_a_bound_unit_with_an_entry_that_needs_a_serial_and_has_none_reports_one_line`,
-  `test_the_serial_finding_does_not_move_the_exit_code_and_prints_no_console_line`,
-  `test_the_serial_fact_adds_no_source_kind_and_no_input_shape_row`, and
-  `test_the_serial_fact_names_no_second_identity_key_and_no_new_fact_key`. `tests/test_reports.py` gained
-  `test_the_serial_section_prints_only_when_a_run_read_a_state_document_and_marked_a_unit` and
-  `test_the_serial_section_is_byte_identical_between_runs`; the order pin
-  `test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders` reads the new heading through its
-  owner. `tests/test_variables.py` gained
-  `test_the_declaration_set_holds_the_serial_name_only_for_a_run_that_read_a_value_for_it`. `tests/conftest.py` holds
-  the shared content as `serial_content` and the three runs on it as `serial_run`, because three modules read the same
-  pair content: the run that reads no state document, the run that reads one and declares no pair, and the run that
-  reads one and declares the pair the first run's rows show. The console-shape pin and the corpus finding pins are
-  unchanged, so no pin was moved.
-
-- Measurements, 2026-11-27. On the committed state document, 15 entries, 3 sit in a sub-block that declares the field:
-  `panos_address.web_range_33333333` names `firewall-2` inside `Production-DG`/`Vsys2`, `panos_aggregate_interface.loopback_a1a1a1a1`
-  names `firewall-3` inside `ngfw`, and `panos_address.placeholder_device_99999999` names the placeholder, which F3.5
-  keeps out of the fact, so it reads no value. On the entry that names the value, printed through the print site the
-  table governs: the block prints `var.firewall_2`, `site_data.record_pair` records the pair, `decode_id` reads the
-  value back inside the location the entry sits in, and the gate answers nothing for the pair; the same fact printed as
-  a literal is a finding through the same rule. Because the committed corpus holds no entry that needs the fact inside
-  a unit a declaration can mark, the finding pins write their own content: the export places `Web-Range` inside
-  `Vsys1` in `Production-DG`, the state document holds the same entry with no value for the field, and the declared
-  run prints one section with one line inside `DEVICE GROUP: Production-DG`. The run that reads the same document and
-  declares no pair prints no serial section, and with the section taken out the declared report reads byte for byte as
-  that report, so the state read and the grouping rule write the same bytes as before the piece; two runs on the same
-  arguments and the same content write byte-identical layouts. On the declaration half, `multi_device_templates.xml`
-  recorded a value for the fact at the print site for two units, so the set holds the name the naming rule derives
-  from each value and the block consumes it, while none of the three pair runs records the serial name, because the
-  reference read reaches the ownership half only and prints nothing, and no unit's `site.auto.tfvars` holds it.
-
-- Documents that moved in the same commit: `docs/IMPORT_BINDING.md` §2 decision 6 as taken with the date and the four
-  answers, §1 fact 3, and §4 for the live half; `docs/ARCHITECTURE.md` §3.2 for the third fact kind, its line shape,
-  its printing condition and its pins, and §4.8 for the value that reaches an id through the table;
-  `docs/CODEBASE_ASSEMBLY.md` §9 rule 8 and its pin list; `backlog.md` Epic 14 open fact 1, which now holds only the
-  half a live target states. `docs/ARCHITECTURE.md` §3.3 is unchanged, because the document reaches the run through
-  the door the state read already uses. The module docstrings of `tests/test_reports.py` and `tests/test_variables.py`
-  and the group list of `tests/test_state_coverage.py` moved with the pins.
-
-- Gate, measured 2026-11-27 single-threaded on the tree that holds this work, in one process: `ruff check .` clean at
-  `py310` with the 120-character line length, `ruff format --check .` clean on the same 113 files,
-  `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest -p no:cacheprovider` with no parallel
-  plugin exits 0 with 1,897 passed and the same 4 `tflint` skips, so 1,901 pins in 55 test modules, in 434.29 s. Run
-  times on this machine move between runs, so each figure here is one measurement. The pin count moved from 1,891 to
-  1,901: seven in `tests/test_state_coverage.py` (32 to 39), two in `tests/test_reports.py` (33 to 35), and one in
-  `tests/test_variables.py` (8 to 9). The test module count stayed 55 and the format file count stayed 113. `tflint`
-  is absent on this machine, so the four skips are the four `tflint` pins in `tests/test_sanity_gate.py`, and
-  `terraform` is present at 1.16.2, so the provider-schema pins ran. No committed golden byte moves:
-  `tests/golden` holds no data file and only 87 `.tf` files, no fixture is added, and the finding pins read the
-  content `tests/conftest.py` writes, so the prose corpus counts in `tests/test_build_kitchen_sink.py`,
-  `tests/test_api_requests.py`, `tests/test_policy_order.py` and `docs/ARCHITECTURE.md` §5.1 did not move.
-
+- What the new document holds: the gate-size decision, the shared test definitions with the two resource-line
+  patterns and the rule each serves, the Python floor rule, the missing-binary skip rule, and the one-owner rule for
+  the tool pins. It links to `docs/ARCHITECTURE.md` §1.1 for the layout and the rule that the full run is the default
+  gate, to `docs/ARCHITECTURE.md` §4.6 for the post-run gate on the output a run wrote, and to `docs/WRITING_RULES.md`
+  rule 4 for the rule that a wording check lives in `tools/check_documents.py`. The document names the pins that hold
+  each rule, and `docs/README.md` names it in the index and in the owner table.
+- The pin that moved: `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, the pin that holds the
+  index rule, now reads `docs/GATE_AND_CI.md` through the root index. No pin was added, no pin body changed, and no
+  test module changed.
+- Gate, measured 2026-11-27 single-threaded in one process with no parallel plugin, on the tree that holds this work:
+  `ruff check .` clean at `py310` with the 120-character line length, `ruff format --check .` clean on the 114 files
+  it reads, which is one more than the baseline because of the new markdown document, `python3 tools/check_documents.py`
+  reports no finding, and `python3 -m pytest -p no:cacheprovider` exits 0 with 1,897 passed and the same 4 `tflint`
+  skips, so 1,901 pins in 55 test modules, in 411.32 s, measured again after the tracking files were written; the same
+  set measured 464.24 s before they were written, so the counts agree and only the time moved. Run times on this
+  machine move between runs, so each figure here is one measurement. The pin count and the test module count did not
+  move. `tflint` is absent on this machine, so the four skips are the four `tflint` pins in
+  `tests/test_sanity_gate.py`, and `terraform` is present at 1.16.2, so the provider-schema pins ran. No committed
+  golden byte moved.
 - Document review: every name a document claims exists, read through `tools/check_documents.py` check 1 over
-  `README.md`, `docs/`, and the tracking files, which reports no finding. `acceptance.md` holds this piece's criteria,
-  and the six places where measurement contradicted the plan are recorded there as measured: the table already states
-  the row, `decode_id` gained no field, `location_agrees` is the comparison rather than `field_agrees`, the pins are
-  group 9 rather than group 7, `entry_needs_serial` answers from the entry's own location, and the report section is
-  stated in `docs/ARCHITECTURE.md` §3.2, which the report rule owns, rather than in `docs/CODEBASE_ASSEMBLY.md` §10,
-  which owns the commit action.
+  `README.md`, `docs/`, and the tracking files, which reports no finding. `acceptance.md` holds this piece's criteria.
+- The baseline this piece started from was Piece 14B.1's measurement, 2026-11-27: 1,897 passed and 4 `tflint` skips,
+  so 1,901 pins in 55 test modules, and `ruff format --check .` clean on 113 files.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/IMPORT_BINDING.md`, `docs/ARCHITECTURE.md` §1, §2.2,
-§3.2, §3.3, §4.5, §4.6, §4.8, §5, §6, `docs/CODEBASE_ASSEMBLY.md` §7, §9, `docs/INPUT_SHAPES.md`,
-`tools/check_documents.py`, `src/container_coverage.py`, `src/input_shapes.py`, `src/import_blocks.py`,
-`src/naming.py`, `src/resource_mapping.py`, `src/sanity_checks.py`, `src/site_data.py`, `src/state_coverage.py`,
-`src/state_input.py`, `src/unit_manifest.py`, `src/panorama_to_terraform.py`, `tests/conftest.py`,
-`tests/test_container_coverage.py`, `tests/test_reports.py`, `tests/test_state_coverage.py`,
-`tests/test_variables.py`, `tests/fixtures/state_workspace.json`.
+`commit.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/ARCHITECTURE.md` §1.1, `docs/USAGE_GUIDE.md`,
+`docs/GATE_AND_CI.md`, `pyproject.toml`, `requirements.txt`, `.github/workflows/python-tests.yml`,
+`.pre-commit-config.yaml`, `tools/check_documents.py`, `tests/conftest.py`, `tests/test_layout.py`,
+`tests/test_sanity_gate.py`, `tests/test_write_path.py`, `tests/test_dependency_wiring.py`,
+`tests/test_resource_mapping.py`, `tests/test_reference_edges.py`, `tests/test_source_fetch.py`,
+`tests/test_commit_actions.py`.
 
-The next piece: Piece 14B.2, the rule types, is blocked on decision 7 and on the F3.5 rulebase value, and Piece 14B.3
-needs decision 8 and the built-in name table, so both stay open in `to-do.md`. Decisions 5 and 9 are untaken, so the
-completeness half and permanence stay open in Phase 14C. The live-target serial stays in `backlog.md`. The two open
-process-debt pieces, the gate and CI document and the watch list document, are in `to-do.md` and `backlog.md`.
+The next piece: the watch-list document, `docs/WATCHED_RULES.md`, whose name is now taken. Piece 14B.1, the device
+serial fact for a bound unit, is complete on main, 2026-11-27, and committed, so its record lives in the git history.
+Piece 14B.2, the rule types, is blocked on decision 7 and on the F3.5 rulebase value, and Piece 14B.3 needs decision 8
+and the built-in name table, so both stay open in `to-do.md`. Decisions 5 and 9 are untaken, so the completeness half
+and permanence stay open in Phase 14C. The live-target serial stays in `backlog.md`.
 
 ## Rules to keep when writing documents
 
@@ -116,34 +53,26 @@ This file keeps the status and the links and states no writing rule of its own.
 
 ## Test gate and CI
 
-- Gate size, decided 2026-11-13: no smaller default gate is adopted. The full run stays the default gate, and
-  the plan check pins and the corpus pins stay inside it; nothing is removed from the full run. A smaller run is
-  a working loop on one area only, as an explicit command-line selection, followed by the full run before a
-  result is recorded or the work is committed. It is recorded in the report and in `docs/ARCHITECTURE.md` §1.1,
-  and not in the tests, because the suite states no marks and a mark would make the smaller set the default.
-- The shared test definitions are in `tests/conftest.py`, so a test module reads them there instead of
-  defining its own copy, and no test module imports another test module (`docs/ARCHITECTURE.md` §1.1).
-  `conftest.py` states the two resource-line patterns as data, both requiring the block brace, each with the
-  rule it serves: `RESOURCE_RE` answers the resource type for the pins that read the emitted type set, and
-  `RESOURCE_ADDRESS_RE` answers the type and the local name for `tests/test_dependency_wiring.py`, which reads
-  `findall` as pairs.
-- The CI gate reads the Python floor as 3.10, and the matrix legs are 3.10, 3.11, 3.12 and 3.13, each a minor
-  version, never an exact patch. `pyproject.toml` states the floor, and `README.md` and `docs/USAGE_GUIDE.md`
-  state the same value. `target-version` equals that floor, so the lint gate enforces the spelling the project
-  writes: the PEP 604 union for an optional value, the call rule read from `collections.abc`, and `strict`
-  stated at every `zip` call. No pin reads the workflow file, and the workflow states no level of its own, so
-  the CI legs read `pyproject.toml`; no leg runs a Python below the level the gate enforces.
-- The pins that run the `tflint` rule set and the pins that run `terraform` skip only for a missing binary and
-  assert on a non-zero run, so the `terraform-gate` CI job, which has the binaries, is where they run; the
-  matrix legs skip them. A pin that reads which directory one of those two checks ran on passes no binary, so it
-  runs on a machine that has neither and reads the directory from the result.
-- The Terraform version CI runs is stated in the `terraform-gate` job of `.github/workflows/python-tests.yml`, which
-  is the CI owner for the tool pins, and the documents read it as the CI statement of that pin. Each pin has one
-  owner: the Terraform minimum at `src/commit_actions.py::TERRAFORM_MINIMUM`, the provider version at
-  `tests/conftest.py::declared_provider`, and the CI Terraform version in the workflow. A document names the owner it
-  reads the value through and states a version only as the pin itself or as the measurement it made, so the recorded
-  answers name the binary that answered them: Terraform 1.16.2 is the binary on this machine, and a gate answer
-  measured on the CI line names the CI version.
+The gate and CI rules have an owner document, `docs/GATE_AND_CI.md`, named by `docs/README.md` and by the root index.
+This section keeps the status, the links and the measurements recorded here, and states no rule of its own. The gate
+size, the shared test definitions, the Python floor, the missing-binary skip and the one-owner rule for the tool pins
+are read through that document, and the layout and the rule that the full run is the default gate are read through
+`docs/ARCHITECTURE.md` §1.1. The rule that a wording check lives in `tools/check_documents.py`, which the test set
+does not read, is read through `docs/WRITING_RULES.md` rule 4.
+
+- Status, measured 2026-11-27 on the tree that holds this piece, single-threaded in one process with no parallel
+  plugin: `ruff check .` clean, `ruff format --check .` clean on 114 files, `python3 tools/check_documents.py` reports
+  no finding, and `python3 -m pytest -p no:cacheprovider` exits 0 with 1,897 passed and 4 `tflint` skips, so 1,901
+  pins in 55 test modules, in 411.32 s. Run times on this machine move between runs, so each figure here is one
+  measurement: the same set measured 464.24 s on the same tree before the tracking files were written, so the counts
+  agree and only the time moved.
+- The pin count did not move, and the test module count stayed 55. The format file count moved from 113 to 114 with
+  the new markdown document. The pin that holds the index rule is
+  `tests/test_layout.py::test_the_indexes_name_every_document_under_them`, and it reads the new document through the
+  root index.
+- Binary measurements on this machine: `tflint` is absent, so the four skips are the four `tflint` pins in
+  `tests/test_sanity_gate.py`, and `terraform` is present at 1.16.2, so the provider-schema pins ran. A gate number
+  measured on the CI line names the CI version, and the CI-line measurement is recorded in `backlog.md`.
 
 ## Watch for the shape tables and the write path
 
