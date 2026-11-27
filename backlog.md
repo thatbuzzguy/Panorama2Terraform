@@ -936,7 +936,10 @@ restated here; they are in the record and the git history. Only the open items a
   part is the data file a module consumes.
 - Reports are per run. The codebase-level view is the merged records (Piece 11C.2); the run's report gains one
   section that names the units the run built and the codebase units the run did not read, and no fifth root-set
-  file states the unit set a second time. The managed boundary is still not built.
+  file states the unit set a second time. The report also gains the section decision 4 of
+  `docs/IMPORT_BINDING.md` §2 landed on 2026-11-26, which names the units a run marked and the entries inside them
+  the property scan reads as zero change; that half is offline measurable, so it is pinned, and the plan half stays
+  open here because a plan needs a device. The managed boundary is still not built.
 - Open facts for Epic 14, recorded here because no offline measurement reads them (the rules are in
   `docs/IMPORT_BINDING.md`):
   1. The device serial for a bound unit, and which declared source states it. The export names a device as a

@@ -27,7 +27,10 @@ decision 3, taken 2026-11-26):
    The pairs are sorted by name, so no answer depends on the order they were declared. A unit a pair names prints
    that pair's value and a unit no pair names prints `EMPTY_ANSWER`. Two modes for one unit are an input refusal,
    so the run exits 1 and writes no file. The pair shape is the CLI's rule, and the argument is held by the CLI,
-   so no rule owner states a flag of its own; the write step reads the answer through this module.
+   so no rule owner states a flag of its own; the write step reads the answer through this module. The set of rows
+   that state a value, which is the set the report names, is read through `marked_units` in the order the record
+   states, and the value through `mode_of`, so the report states no field and no value (decision 4, taken
+   2026-11-26).
 
 The manifest names the directory; F6.1 does not write one. Every test runs offline.
 """
@@ -1318,3 +1321,39 @@ def test_the_write_step_reads_the_mode_through_the_row_owner_and_names_no_value(
     for value in MODE_VALUES:
         assert f'"{value}"' not in generator, (value, "the write step states no value of the pair")
     assert "unit_writes_blocks" not in blocks_owner, "the pair owner states no mode rule of its own"
+
+
+def test_the_report_reads_the_marked_units_and_the_mode_through_the_row_owner(tmp_path):
+    """Rule 6, the report half: `marked_units` is the set of rows that state a value rather than `EMPTY_ANSWER`, in
+    the order the record states, and `mode_of` reads the field its shape declares, so a report that names the marked
+    units states no unit rule, no field and no value of the pair.
+
+    Measured 2026-11-26 on `GROUPING` through the script: the run that declares no pair marks no unit, so
+    `marked_units` answers an empty set and the report section that names the marked units prints nothing. The run
+    that declares the 5 pairs its own rows name marks 10 of its 11 rows, and the row it does not mark is `Shared`,
+    because the pair builder reads a place through `container_coverage` and the shared set names no place.
+    """
+    _run(FIXTURES_DIR / GROUPING, tmp_path)
+    rows = _manifest(tmp_path)
+    pairs = declaration_pairs(rows, MODE_VALUES[0])
+    assert len(pairs) == 5, pairs
+    out = tmp_path / "declared"
+    assert _run(FIXTURES_DIR / GROUPING, out, declaration_args(pairs)).returncode == 0
+    declared_rows = _manifest(out)
+
+    assert unit_manifest.marked_units(rows) == [], rows
+    marked = unit_manifest.marked_units(declared_rows)
+    assert len(marked) == 10, [unit_manifest.mode_of(row) for row in declared_rows]
+    assert marked == [row for row in declared_rows if unit_manifest.mode_of(row) != unit_manifest.EMPTY_ANSWER], marked
+    assert all(unit_manifest.mode_of(row) == MODE_VALUES[0] for row in marked), marked
+    unmarked = [row for row in declared_rows if unit_manifest.mode_of(row) == unit_manifest.EMPTY_ANSWER]
+    assert len(unmarked) == 1, [unit_manifest.mode_of(row) for row in declared_rows]
+    assert unit_manifest.unit_name(unit_manifest.facts_of(unmarked[0])) == "Shared", unmarked
+
+    generator = (SRC_DIR / "panorama_to_terraform.py").read_text(encoding="utf-8")
+    line_owner = (SRC_DIR / "entry_coverage.py").read_text(encoding="utf-8")
+    assert "unit_manifest.marked_units(" in generator, "the report reads the marked set through the row owner"
+    assert "unit_manifest.mode_of(" in line_owner, "the unit line reads the value through the row owner"
+    assert 'row["mode"]' not in generator and 'row["mode"]' not in line_owner, "the report states no field of the row"
+    for value in MODE_VALUES:
+        assert f'"{value}"' not in generator and f'"{value}"' not in line_owner, (value, "the report states no value")

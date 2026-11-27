@@ -33,6 +33,18 @@ Five rules, stated once here.
    output reads even when the object holds no value for it, so the parity
    measurement can still name a field the parse did not keep; the finding set
    cannot (`tests/test_property_coverage.py::test_the_scan_cannot_see_a_field_the_parse_stored_empty`).
+   Decision 4 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26, names the fact the pair answers and keeps this rule
+   as its owner: `WHOLE_BLOCK_FACT` for an entry whose two sets are the same set, and the difference for the rest,
+   one name per entry. `block_rows` carries the pair for every entry in the scan scope, `pair_answer` states the
+   answer, and `property_findings` is the difference subset, so the scope rule above is stated once. The severity is
+   WARN by `docs/ARCHITECTURE.md` §4.6 rule 1, so the fact cannot move the exit code, and the print shape is the
+   report, so §3.2's console kinds stay at five. Pinned by
+   `tests/test_property_coverage.py::test_the_fact_name_is_data_read_through_the_owner`,
+   `::test_the_scan_rows_carry_the_pair_and_the_findings_are_the_difference_subset`,
+   `::test_the_pair_answer_names_one_fact_per_entry_through_the_owner`,
+   `::test_the_pair_answer_inherits_the_blind_side_the_scan_states`,
+   `::test_the_pair_answer_is_a_coverage_fact_that_cannot_move_the_exit_code`, and
+   `::test_the_pair_answer_prints_in_the_report_only_and_moves_no_console_kind`.
 5. The run view (F8.9). A run may read more than one response, so `RunView` answers rules 1 to 4 for the
    set: each protocol answer goes to the ledger that holds the entry, and the parse answers are joined in
    the run order the entry point decided. The view states no rule of its own and takes the join as an
@@ -81,6 +93,19 @@ Pinned in `tests/test_reports.py`:
 `tests/test_reports.py::test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders`,
 `tests/test_reports.py::test_the_unit_section_names_no_directory_and_groups_by_the_f3_9_rule`, and
 `tests/test_reports.py::test_the_report_prints_no_console_line_for_the_unit_section`.
+
+Epic 14 (`docs/IMPORT_BINDING.md` §2, decision 4, taken 2026-11-26): the report gains one section that names the units
+a run marked and, inside each, one line per entry in the scan scope with the pair answer. The units and the value are
+read through `unit_manifest`, the owner of the row the decision placed the mode on, so this module states no unit rule
+and no value of the pair; the pair answer is read through `pair_answer`, so no fact wording is stated twice. The
+section prints only when the run marked a unit, so a run that declares no pair writes the report bytes it writes
+today, the grouping is the F3.9 rule the other report sections use, and the sort is the report sort. Pinned by, one
+per rule: `tests/test_reports.py::test_the_marked_section_names_the_units_the_run_marked_through_the_record`,
+`::test_the_marked_section_prints_one_line_per_entry_in_the_scan_scope`,
+`::test_the_marked_section_prints_only_when_the_run_marked_a_unit`,
+`::test_the_marked_section_groups_by_the_f3_9_rule_and_names_no_directory`,
+`::test_the_marked_section_is_byte_identical_between_runs`, and
+`::test_the_report_prints_no_console_line_for_the_marked_section`.
 """
 
 import re
@@ -140,6 +165,23 @@ REPORT_HEADING = "PER-ENTRY CONVERSION REPORT"
 GAP_HEADING = "Entries That Produced No Output"
 PROPERTY_HEADING = "Captured Properties No Output Read"
 
+# The section that names the units a run marked, and the entries inside them that read as zero change
+# (`docs/IMPORT_BINDING.md` §3). The heading, the rule paragraph and the part word are stated here; the units and the
+# value are read through `unit_manifest`, and the pair answer through `pair_answer`, so this module states no unit
+# rule, no value of the pair and no row field. The section prints only when the run marked a unit, so a run that
+# declares no pair writes the report bytes it writes today. Pinned in `tests/test_reports.py`.
+MARKED_HEADING = "The Units the Run Marked and the Entries That Read as Zero Change"
+MARKED_RULE = (
+    "One line per unit the run marked, read through `unit_manifest`, and one line per entry inside that unit that "
+    "the property scan reads. The scan compares the properties a matrix row declares with the fields an output read "
+    "for the entry, so the fact name is printed for an entry the scan reads as a whole block and the properties no "
+    "output read are printed for the rest. The scan reads the set the parse kept, so an entry whose fields the parse "
+    "stored empty reads as a whole block: the blind side `captured_fields` states is inherited here. A fact is an "
+    "operator action, not a broken output, so it does not change the exit code, which the F4.1 gate still decides. "
+    "The lines are grouped by the F3.9 scope rule."
+)
+MARKED_PART = "marked"
+
 # The unit section (`docs/MULTI_RUN_CODEBASE.md` §7). The heading, the rule paragraph and the line shape are here;
 # the two sets are read through `unit_manifest.units`, the one unit rule, so this module states no unit rule and no
 # second grouping rule.
@@ -160,6 +202,15 @@ RECORD_ONLY_PART = "read only through the record"
 # same fact (`docs/ARCHITECTURE.md` §3.2).
 CAPTURED_LABEL = "captured"
 NO_OUTPUT_READ = "no output read"
+
+# The pair the property scan answers per entry, as decision 4 of `docs/IMPORT_BINDING.md` §2 took it on
+# 2026-11-26: the properties a matrix row declares, and the fields an output read for the entry. The fact name is
+# data here, in the module that owns the pair, so no report, no console block and no test module states it a second
+# time. The difference half is `NO_OUTPUT_READ` above. The severity is WARN by `docs/ARCHITECTURE.md` §4.6, because
+# the fact compares two sets, so it cannot move the exit code; the print shape is the report, so §3.2's five console
+# kinds stay at five and no console line prints the fact. Pinned by
+# `tests/test_property_coverage.py::test_the_fact_name_is_data_read_through_the_owner`.
+WHOLE_BLOCK_FACT = "whole_block"
 
 # One matrix row per emitted type, keyed by resource name, so the property scan can
 # find the row that covers an entry. `row_detail` gives the resource name for the
@@ -583,16 +634,21 @@ class EntryLedger:
     def gap_count(self) -> int:
         return len(self.gaps())
 
-    def property_findings(self) -> list:
-        """Entries with a captured property no output read (F4.4), in report order.
+    def block_rows(self) -> list:
+        """One row per entry in the scan scope, each carrying the pair the scan answers for it, in report order
+        (decision 4 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26).
 
         Scope is the entries a matrix row covers. An entry whose container row is a
         report, inventory, bookkeeping, count-only, or nested-block destination has no
-        matrix row, so the scan does not report it; those field gaps are recorded in
+        matrix row, so the scan answers nothing for it; those field gaps are recorded in
         `backlog.md`. A property entry inside a config-object entry is in scope when its
         container maps to a matrix row.
+
+        Each row carries the difference as `unused_properties`, so the pair answer is `pair_answer`: the fact name
+        when the two sets are the same set, and the difference when they are not. `property_findings` is the subset
+        whose answer is a difference, so the finding shape F4.4 pins stays as it is.
         """
-        findings = []
+        rows = []
         for entry in self.entries():
             container = self.parents.get(entry)
             mark = self.mark_for(entry)
@@ -602,14 +658,17 @@ class EntryLedger:
             if matrix_row is None:
                 continue
             captured = set(self.captured_fields(mark))
-            unused = tuple(sorted(captured - set(mark["captured"].used_keys())))
-            if not unused:
-                continue
-            finding = self.row_for(entry)
-            finding["resource"] = matrix_row["resource"]
-            finding["unused_properties"] = unused
-            findings.append(finding)
-        return sorted(findings, key=lambda row: (row["line"] or 0, row["container"], row["name"]))
+            row = self.row_for(entry)
+            row["resource"] = matrix_row["resource"]
+            row["unused_properties"] = tuple(sorted(captured - set(mark["captured"].used_keys())))
+            rows.append(row)
+        return sorted(rows, key=lambda row: (row["line"] or 0, row["container"], row["name"]))
+
+    def property_findings(self) -> list:
+        """Entries with a captured property no output read (F4.4), in report order: the subset of `block_rows`
+        whose pair answer is a difference, so the scan scope rule is stated once.
+        """
+        return [row for row in self.block_rows() if row["unused_properties"]]
 
 
 # --- the run view (F8.9, `docs/API_CONVERSION_PATH.md` §6) ---------------------
@@ -726,8 +785,14 @@ class RunView:
     def counts(self) -> Counter:
         return Counter(self.join([part.ledger().counts() for part in self.ordered]))
 
+    def block_rows(self) -> list:
+        """The scan rows for the set, joined in run order, so a run that read one response is answered the same as
+        that response's own ledger.
+        """
+        return self.join([part.ledger().block_rows() for part in self.ordered])
+
     def property_findings(self) -> list:
-        return self.join([part.ledger().property_findings() for part in self.ordered])
+        return [row for row in self.block_rows() if row["unused_properties"]]
 
     def property_entry_total(self) -> int:
         return self.join([part.ledger().property_entry_total() for part in self.ordered])
@@ -829,13 +894,15 @@ def gap_lines(ledger: EntryLedger) -> list:
 
 
 def property_line(row: dict) -> str:
-    """One property scan line: line, object type, name, the properties no output read.
+    """One property scan line: line, object type, name, the pair answer.
 
     The matrix row is a fixed-width column, so it is on the report line and not on the console line
-    (`docs/ARCHITECTURE.md` §3.2).
+    (`docs/ARCHITECTURE.md` §3.2). The fact part is `pair_answer`, so the same shape prints the fact name for
+    an entry the scan reads as a whole block and the difference for the rest, and the marked section states no
+    second line shape.
     """
     line = f"{row['line'] if row['line'] is not None else 0}"
-    parts = [f"  line {line:>4}  ", f"{entry_identity(row):<38} ", f"{row['resource']:<32} ", property_fact(row)]
+    parts = [f"  line {line:>4}  ", f"{entry_identity(row):<38} ", f"{row['resource']:<32} ", pair_answer(row)]
     if row.get("vsys"):
         parts.append(f"  [{row['vsys']}]")
     return "".join(parts).rstrip()
@@ -848,6 +915,32 @@ def property_fact(row: dict) -> str:
     names them as parsed-object key names, never as an XML tag.
     """
     return f"{NO_OUTPUT_READ}: " + ", ".join(row["unused_properties"])
+
+
+def pair_answer(row: dict) -> str:
+    """The pair answer for one entry, as decision 4 of `docs/IMPORT_BINDING.md` §2 took it on 2026-11-26.
+
+    One fact name per entry, so an entry never prints both: `WHOLE_BLOCK_FACT` when the matrix row's declared set
+    and the fields the run read are the same set, and the difference when they are not, printed in the words
+    `property_fact` already states, so no new fact wording appears. The blind side is inherited: `captured_fields`
+    drops a field stored empty and a field the parse never stored is not in the pair, so an entry the parse stored
+    nothing for answers the fact name. The answer is a coverage fact, so it cannot move the exit code
+    (`docs/ARCHITECTURE.md` §4.6), and it prints in the report only, so no console line prints it. Pinned by
+    `tests/test_property_coverage.py::test_the_pair_answer_names_one_fact_per_entry_through_the_owner` and
+    `::test_the_pair_answer_inherits_the_blind_side_the_scan_states`.
+    """
+    return WHOLE_BLOCK_FACT if not row["unused_properties"] else property_fact(row)
+
+
+def marked_unit_line(row: dict) -> str:
+    """One unit line in the marked section: the part word, the unit name, and the value the record states.
+
+    The name is the deepest scope the export declares, read through `unit_manifest`, and the value is read through
+    `unit_manifest.mode_of`, so the report states no row field and no value of the pair, and the line names no
+    directory, the same rule `unit_line` keeps. Pinned by
+    `tests/test_reports.py::test_the_marked_section_names_the_units_the_run_marked_through_the_record`.
+    """
+    return f"  {MARKED_PART:<28} {unit_manifest.unit_name(unit_manifest.facts_of(row))}  {unit_manifest.mode_of(row)}"
 
 
 def unit_part(row: dict, run_units: set) -> str:

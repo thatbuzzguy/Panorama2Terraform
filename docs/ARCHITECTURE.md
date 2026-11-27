@@ -686,6 +686,13 @@ Pinned by `tests/test_container_coverage.py::test_the_console_line_shape_is_stat
 `tests/test_property_coverage.py`, `tests/test_shadow_coverage.py`, and
 `tests/test_split_device_groups.py::test_the_splitter_prints_the_fact_it_read_for_a_file_with_no_device_group_row`.
 
+The fact the property pair answers for an entry whose two sets are the same set (`entry_coverage.WHOLE_BLOCK_FACT`,
+`docs/IMPORT_BINDING.md` §2, decision 4, taken 2026-11-26) prints in the report only, so the kinds above stay as
+they are and no sixth kind exists: the console block is built from the difference half of the pair, so a run that
+marks a unit prints the answer in its report and on no console line. Pinned by
+`tests/test_property_coverage.py::test_the_pair_answer_prints_in_the_report_only_and_moves_no_console_kind` and
+`tests/test_reports.py::test_the_report_prints_no_console_line_for_the_marked_section`.
+
 The gate is not a scan, so it holds no console wording: its findings print through the gate's own finding shape,
 `sanity_checks.Finding.render`, the position plus the detail, which is the shape `tests/test_sanity_gate.py` pins.
 A gate finding names a rule and a position and has no entry identity, so the shape above has nothing to hold, and
@@ -1150,10 +1157,12 @@ Four report files, each written only when it has content:
 
 - `CONVERSION_REPORT.txt` — one line per config entry the parse pipeline read (§3.2). Section
   order is fixed: report header, summary, gaps, property findings, shadows, repeated names (§3.5),
-  reference cycles (§3.6), state ownership, state drift, then the grouped entry lines. Each section
-  prints only when it has content, and the shadow section prints only for a run that declares a
-  parent source (`--path` with `--parent`, the api source only; a path that is not a scope path is
-  an argument error, exit 2).
+  reference cycles (§3.6), state ownership, state drift, then the run's unit section
+  (`MULTI_RUN_CODEBASE.md` §7), then the section that names the units a run marked and the entries
+  inside them the property scan reads as zero change (`IMPORT_BINDING.md` §2, decision 4, and §3),
+  then the grouped entry lines. Each section prints only when it has content, and the shadow section
+  prints only for a run that declares a parent source (`--path` with `--parent`, the api source only;
+  a path that is not a scope path is an argument error, exit 2).
 - `MANUAL_SETUP_REPORT.txt` — report-only areas, the location facts a type
   cannot carry, and the placeholder template. The routing section prints only the rows the ledger marks
   `report` (`entry_coverage.protocol_report_rows`), so it holds no duplicate of the `.tf`: an entry the

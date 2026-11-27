@@ -14,22 +14,23 @@ are in `backlog.md`. No `src/` file is touched until a piece lands, and the shar
 hand against main when a branch still holds work. No piece can be written from an untaken decision, so each piece
 names the decision it needs.
 
-### Phase 14A, the mode as data
+### Phase 14A, the mode as data — complete on main, 2026-11-26
 
-- **14A.1** to **14A.3** are complete on main, 14A.3 on 2026-11-26, and committed, so their records live in the git
-  history. Decision 1 is taken: the two values, and the level the mode sits at. Decision 2 is taken: the field, the
-  owner that states it, and the answer for a unit the run did not mark. Decision 3 is taken, 2026-11-26: the
-  declaration names units through `scope=mode` pairs sorted by place, the argument is `--import-mode` held by the CLI,
-  a declaration that disagrees with a record row is refused before the first write, and `--import-blocks` is removed.
-  The pair and the level are data in `src/import_blocks.py`, the field and the declaration rule are data and rules in
-  `src/unit_manifest.py`, the pair between a place and the fact it names is rule 4 of `src/container_coverage.py`, and
-  the pins that read them as data are in `tests/test_import_blocks.py` group 8 and group 9,
-  `tests/test_unit_manifest.py` group 10, `tests/test_container_coverage.py` group 5,
-  `tests/test_data_file_gate.py` and `tests/test_codebase_state.py`, with the pair and the declaration shape read
-  through `tests/conftest.py`. No committed golden byte moved, because `tests/golden` holds no data file.
-- **14A.4** — the report section that names the units a run bound, through `entry_coverage.py` and the F3.9
-  grouping rule, so no module states a second unit set or a second grouping rule. Needs decision 4, the whole-block
-  fact's name, owner and severity.
+The four pieces are complete and committed, so their records live in the git history and the measurements are in
+`agent-status.md`. Decision 1 is taken: the two values, and the level the mode sits at. Decision 2 is taken: the field,
+the owner that states it, and the answer for a unit the run did not mark. Decision 3 is taken, 2026-11-26: the
+declaration names units through `scope=mode` pairs sorted by place, the argument is `--import-mode` held by the CLI, a
+declaration that disagrees with a record row is refused before the first write, and `--import-blocks` is removed.
+Decision 4 is taken, 2026-11-26: the name is `whole_block`, the owner is the property scan through
+`entry_coverage.py`, the severity is WARN, and the fact prints in the report only, so the report gains one section that
+names the units a run marked and the entries inside them the scan reads as zero change, grouped by the F3.9 rule, and
+prints nothing for a run that marked no unit. The pair and the level are data in `src/import_blocks.py`, the field and
+the declaration rule are data and rules in `src/unit_manifest.py`, the pair between a place and the fact it names is
+rule 4 of `src/container_coverage.py`, the fact name and the pair answer are rule 4 of `src/entry_coverage.py`, and the
+pins that read them as data are in `tests/test_import_blocks.py` group 8 and group 9, `tests/test_unit_manifest.py`
+group 10, `tests/test_container_coverage.py` group 5, `tests/test_data_file_gate.py`, `tests/test_codebase_state.py`,
+`tests/test_property_coverage.py` and `tests/test_reports.py`, with the pair and the declaration shape read through
+`tests/conftest.py`. No committed golden byte moved, because `tests/golden` holds no data file.
 
 ### Phase 14B, the facts an id needs
 
@@ -43,8 +44,6 @@ names the decision it needs.
 
 ### Phase 14C, the plan side and permanence
 
-- **14C.1** — the whole-block fact: the name, the owner, the severity, and the report section that names which
-  entries of a bound unit can read as zero change. Needs decision 4.
 - **14C.2** — the completeness half for a bound unit: one block per entry the run's ledger reads as `emitted`.
   Needs decision 5, which states whether it is the same rule as the round-trip cross-check or a second rule.
 - **14C.3** — permanence: `imports.tf` as permanent codebase content or a first-run file, decided on the

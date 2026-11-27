@@ -55,12 +55,13 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
    the record names that unit through the mode field decision 2 took; the half that compares those blocks with
    the entries the run's ledger read is decision 5's.
 
-6. **The whole-block fact is measurable today and has no name.** A block that reads fewer properties than
-   its coverage matrix row declares is a partial block, and a plan that compares a partial block with the
-   live object shows change. The property scan already reads the pair, per container kind, on a run
-   (`tests/test_property_coverage.py`), and `entry_coverage.py` prints the same fact as a captured field no
-   output read. The fact has no name and no owner, so no report can state which entries of a bound unit can
-   read as zero change.
+6. **The whole-block fact is measurable today, and decision 4 gave it a name and an owner on 2026-11-26.** A block
+   that reads fewer properties than its coverage matrix row declares is a partial block, and a plan that compares a
+   partial block with the live object shows change. The property scan already reads the pair, per container kind, on
+   a run (`tests/test_property_coverage.py`), and `entry_coverage.py` prints the same fact as a captured field no
+   output read. Decision 4 named the fact the pair answers for an entry whose two sets are the same set, held it as
+   data in its owner, and put the answer on the report line, so a report can now name which entries of a marked unit
+   read as zero change. The plan half stays open, because a plan needs a device (§3).
 
 7. **A bound codebase covers only what a matrix row emits.** The live objects outside the scan scope stay
    outside the state, so a plan names nothing for them, and the report is the only place that names them.
@@ -97,8 +98,8 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
 
 ## 2. The decisions to take
 
-Each decision names what it needs. Decisions 1, 2 and 3 are taken, so the pieces that read them can be written; the
-rest are untaken, so no piece can be written from them yet.
+Each decision names what it needs. Decisions 1, 2, 3 and 4 are taken, so the pieces that read them can be written;
+the rest are untaken, so no piece can be written from them yet.
 
 1. **The mode values, and the level the mode sits at. Taken 2026-11-25: the mode stops at the unit.** Two
    values, and each names the plan outcome for one unit: the entries are imported, or the entries are added. The
@@ -192,12 +193,49 @@ rest are untaken, so no piece can be written from them yet.
    `tests/test_import_blocks.py::test_a_unit_declared_the_block_value_writes_blocks_and_a_unit_declared_the_other_value_writes_none`
    for the unit that writes the blocks.
 
-4. **The whole-block fact needs a name, an owner, and a severity.** It compares two sets: the properties a
-   matrix row declares, and the fields the emitter reads on a run. By `ARCHITECTURE.md` §4.6 a fact that
-   compares two sets is a coverage fact, so it is a WARN and the exit code stays with the rules that read the
-   files. Its owner is the property scan through `entry_coverage.py`, and the report section that names it
-   must follow the F3.9 grouping rule, so no module states a second grouping rule. The finding must fit the
-   four parts of the console-line shape (`container_coverage.console_line`), or print in the report only.
+4. **The whole-block fact needs a name, an owner, and a severity. Taken 2026-11-26: the name is `whole_block`, the
+   owner is the property scan, the severity is WARN, and the fact prints in the report only.** Four answers, and the
+   owner each answer needs.
+
+   - **The name is `whole_block`**, one word held as data in `src/entry_coverage.py` (`WHOLE_BLOCK_FACT`), so the
+     pair answer, the report line and the pins read it through the owner instead of stating it.
+   - **The owner is the property scan through `entry_coverage.py`**, which already reads the pair per entry: the
+     properties a matrix row declares, and the fields an output read. `block_rows` is the scan scope and carries the
+     pair for every entry in it, `pair_answer` gives one fact name per entry, and `property_findings` is the
+     difference subset of that scope, so the scope rule is stated once and the pinned corpus finding set did not
+     move. The answer inherits the blind side the scan already states, so an entry whose fields the parse stored
+     empty answers the fact name.
+   - **The severity is WARN**, by `ARCHITECTURE.md` §4.6 rule 1: the fact names an operator action, not a broken
+     output, so the exit code stays with the rules that read the files. The run that declares no pair and the run
+     that declares the pairs its own rows name exit the same on the same input.
+   - **The print shape is the report only**, so the console keeps the kinds §3.2 states and no sixth kind appears,
+     and the console-shape pin is unchanged. The report gains one section, after the run's unit section and before
+     the entry lines, that names the units the run marked and one line per entry inside them the scan reads: the
+     pair answer is the fact name for an entry the scan reads as a whole block and the words the finding shape
+     already states for the rest, so the report holds one line shape for both. The marked units are read through
+     `unit_manifest.marked_units` and the value through `unit_manifest.mode_of`, so the report states no unit rule,
+     no row field and no value of the pair. The section prints only when the run marked a unit, so a run that
+     declares no pair writes the report bytes it writes today, and its lines are grouped by the F3.9 rule and stay
+     in the order the scan's own sort gives them.
+
+   Pinned by `tests/test_property_coverage.py::test_the_fact_name_is_data_read_through_the_owner`,
+   `::test_the_scan_rows_carry_the_pair_and_the_findings_are_the_difference_subset`,
+   `::test_the_pair_answer_names_one_fact_per_entry_through_the_owner`,
+   `::test_the_pair_answer_inherits_the_blind_side_the_scan_states`,
+   `::test_the_pair_answer_is_a_coverage_fact_that_cannot_move_the_exit_code`, and
+   `::test_the_pair_answer_prints_in_the_report_only_and_moves_no_console_kind`. The report half is pinned by
+   `tests/test_reports.py::test_the_marked_section_names_the_units_the_run_marked_through_the_record`,
+   `::test_the_marked_section_prints_one_line_per_entry_in_the_scan_scope`,
+   `::test_the_marked_section_prints_only_when_the_run_marked_a_unit`,
+   `::test_the_marked_section_groups_by_the_f3_9_rule_and_names_no_directory`,
+   `::test_the_marked_section_is_byte_identical_between_runs`, and
+   `::test_the_report_prints_no_console_line_for_the_marked_section`, and the order pin
+   `::test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders` is extended for the new
+   section. The marked units and the value are read through the row owner, which
+   `tests/test_unit_manifest.py::test_the_report_reads_the_marked_units_and_the_mode_through_the_row_owner` holds.
+
+   The plan half stays open, because a plan needs a device: the report names which entries read as zero change, and
+   only a live plan shows change. That fact stays in `backlog.md`, with the rest of the Epic 14 live facts.
 
 5. **The completeness rule for a bound unit.** Today `check_import_blocks` reads one block against the block
    it names. For a bound unit the rule needs the other half: one block per entry the run's ledger reads as
@@ -239,6 +277,11 @@ The report rule already names the entries that cannot reach zero change, and the
 holds only for a whole block, so the report section names which entries of a bound unit can read as zero
 change and which cannot, per unit and per matrix row. No test can pin the plan itself, because a plan needs a
 device, so the offline reading is the property scan measured on a run, and the plan fact stays a live fact.
+
+The report half landed on 2026-11-26 through decision 4: `CONVERSION_REPORT.txt` prints one section, after the run's
+unit section, that names the units a run marked and one line per entry inside them that the property scan reads, with
+the pair answer for each entry. A run that declares no pair marks no unit, so the section prints nothing and a default
+run writes the report bytes it writes today. The plan half is unchanged here, and no rule in this section moved.
 
 ## 4. Facts only a live target states
 

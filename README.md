@@ -713,7 +713,8 @@ The records, the reports, and the write path:
   file the same run wrote, the record byte rule between two runs, and the rule that a record read back is not a door
   source, so an update run names none of the codebase's records
 - `tests/test_reports.py` - the two operator-facing migration reports name the scope each entry came from,
-  grouped by one rule
+  grouped by one rule, and the run's report sections for the units the run built and the units and entries a run
+  marked, read through `unit_manifest` and the property scan's own row shape
 - `tests/test_golden_files.py` - the golden byte-for-byte gates, read as paths from the case directory
 
 The coverage sets:
@@ -725,7 +726,9 @@ The coverage sets:
 - `tests/test_entry_coverage.py` - every parse method that reads entries
   marks them, so the per-entry report cannot lie
 - `tests/test_property_coverage.py` - what a matrix row declares against what an output reads, per container
-  kind, measured on a run rather than restated from the row
+  kind, measured on a run rather than restated from the row, with the pair answer for an entry whose two sets are
+  the same set read through its owner, the scan scope and the difference subset, and the fact name, so a default
+  run's report bytes do not move
 - `tests/test_shadow_coverage.py` - the cross-source shadow scan: the per-scope shape in the
   scan, the shadow fact (the key is `state_coverage.ownership_key` read with the facts the parent row
   declares, so it names the parent scope), the report section and its line shape with the parent entry

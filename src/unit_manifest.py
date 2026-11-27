@@ -61,12 +61,17 @@ stated once here.
    names, and the mode the run declares. The value that writes blocks is read positionally through
    `import_blocks.MODE_VALUES`, so this module states no value of the pair, and the write step answers whether a
    unit writes blocks through `unit_writes_blocks`. The argument is held by the CLI, so this module states no flag
-   of its own, and the pair shape errors are the CLI's rule and exit 2. Pinned by
+   of its own, and the pair shape errors are the CLI's rule and exit 2. Decision 4 of `docs/IMPORT_BINDING.md` §2,
+   taken 2026-11-26, names this module as the place a report reads the units a run marked and the value from:
+   `marked_units` answers the marked units and `mode_of` answers one row's value, so the report section that names
+   them states no field and no value of the pair. Pinned by
    `tests/test_unit_manifest.py::test_the_declaration_names_the_units_inside_the_scope_through_the_one_unit_rule`,
    `tests/test_unit_manifest.py::test_a_declared_unit_prints_its_mode_and_an_undeclared_unit_prints_the_empty_answer`,
    `tests/test_unit_manifest.py::test_a_declared_mode_that_disagrees_with_the_record_is_refused_and_writes_no_file`,
    `tests/test_unit_manifest.py::test_the_write_step_reads_the_mode_through_the_row_owner_and_names_no_value`, and
-   `tests/test_unit_manifest.py::test_the_declaration_is_held_by_the_cli_and_the_rule_owner_states_no_flag_of_its_own`.
+   `tests/test_unit_manifest.py::test_the_declaration_is_held_by_the_cli_and_the_rule_owner_states_no_flag_of_its_own`,
+   and
+   `tests/test_unit_manifest.py::test_the_report_reads_the_marked_units_and_the_mode_through_the_row_owner`.
 
 The reference names are recorded by the reference rule (`TerraformGenerator.name_ref`) at the site
 that applies it and arrive here as `references`; this module resolves no name. The sanitizing rule is
@@ -273,6 +278,25 @@ def check_declared_modes(declaration, record_rows: list, source) -> None:
                     f"refusing to declare two modes for unit {unit}: the merged record names {answer} "
                     f"and this run declares {value}"
                 )
+
+
+def marked_units(rows: list) -> list:
+    """Rule 6, read for the report: the rows that state a value of the pair rather than `EMPTY_ANSWER`, in identity
+    order. A run that declares no pair marks no unit, so this answers an empty set for it and the report section
+    that names the marked units prints nothing. The report reads the set through this rule, so the report states no
+    field and no value of the pair. Pinned by
+    `tests/test_unit_manifest.py::test_the_report_reads_the_marked_units_and_the_mode_through_the_row_owner`.
+    """
+    return [row for row in rows if row["mode"] != EMPTY_ANSWER]
+
+
+def mode_of(row: dict) -> str:
+    """Rule 6, read from one row: the value the row states for the unit, through the shape its owner states.
+
+    The field is named once, in `FIELD_ORDER`, so a reader that wants the value reads it through this function and
+    states no field of its own; `parse_rows` is the reader that accepts it.
+    """
+    return row["mode"]
 
 
 def unit_writes_blocks(rows: list, facts: tuple) -> bool:

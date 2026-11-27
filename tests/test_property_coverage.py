@@ -12,6 +12,11 @@ Six groups:
    findings are pinned below. Each is recorded as a follow-up in backlog.md. The scan reads
    the set the parse kept, so its blind side is pinned too: a field stored with an empty
    value is not a captured field, and a field the parse never stored is not in the set.
+   Decision 4 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26, names the fact the pair answers for an entry whose
+   two sets are the same set, and keeps this group as its owner: the fact name is data read through the owner, the
+   scan rows carry the pair for every entry in the scope, the findings are the difference subset of that set, and the
+   answer inherits the blind side above. The fact is a coverage fact, so it cannot move the exit code, and it prints
+   in the report only, so the console keeps the kinds `docs/ARCHITECTURE.md` §3.2 states.
 4. The report section. The findings print in their own section, grouped by the F3.9 scope
    rule, byte-identical between runs. A finding is an operator action, so it does not
    change the exit code, which the F4.1 gate still decides.
@@ -40,8 +45,22 @@ by `PROTOCOL_SHAPE` instead of by the row.
 
 import container_coverage
 import entry_coverage
+import sanity_checks
+import unit_manifest
 import xml_input
-from conftest import FIXTURES_DIR, corpus_fixtures, run_pipeline, run_script, written_bytes
+from conftest import (
+    FIXTURES_DIR,
+    MODE_VALUES,
+    SRC_DIR,
+    TESTS_DIR,
+    corpus_fixtures,
+    declaration_args,
+    declaration_pairs,
+    record_rows,
+    run_pipeline,
+    run_script,
+    written_bytes,
+)
 from resource_mapping import COVERAGE_MATRIX, protocol_row
 
 ROWS = list(COVERAGE_MATRIX)
@@ -823,11 +842,115 @@ def test_the_scan_cannot_see_a_field_the_parse_stored_empty(converter_module, tm
     assert CORPUS_FINDINGS["service_groups.xml"][0][3] == ("description",), CORPUS_FINDINGS["service_groups.xml"]
 
 
+def test_the_fact_name_is_data_read_through_the_owner():
+    """Decision 4 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26): the fact has a name, and the name is data in the
+    module that owns the pair.
+
+    The name is one word, not a sentence, so the pair answer and the report line read it as data. Measured
+    2026-11-26: the string is held in one `src/` module, its owner `entry_coverage.py`, and no test module holds
+    it, so the report, the console block and these pins read the name through the owner instead of stating it.
+    """
+    name = entry_coverage.WHOLE_BLOCK_FACT
+    assert name and " " not in name, name
+    src_texts = {path.name: path.read_text(encoding="utf-8") for path in sorted(SRC_DIR.glob("*.py"))}
+    assert sorted(n for n, text in src_texts.items() if name in text) == ["entry_coverage.py"], sorted(src_texts)
+    test_texts = {path.name: path.read_text(encoding="utf-8") for path in sorted(TESTS_DIR.glob("*.py"))}
+    assert [n for n, text in test_texts.items() if name in text] == [], sorted(test_texts)
+
+
+def test_the_scan_rows_carry_the_pair_and_the_findings_are_the_difference_subset(converter_module, tmp_path):
+    """Rule 4, read as data: `block_rows` is the scan scope and carries the pair for each entry, and
+    `property_findings` is the subset of it whose answer is a difference, so the scope rule is stated once and the
+    pinned finding set does not move.
+
+    Measured 2026-11-26 on `pbf_rules.xml`: 5 scan rows, 1 answered as a whole block, and the 4 the report pins are
+    the difference subset. `tags.xml` is in the scan scope with no finding, so the scope is the wider set.
+    """
+    parser = run_pipeline(converter_module, FINDING_FIXTURE, tmp_path / "scan")
+    assert parser is not None, FINDING_FIXTURE
+    ledger = parser.ledger
+    scope = ledger.block_rows()
+    assert len(scope) == 5, [(row["name"], row["unused_properties"]) for row in scope]
+    assert all("unused_properties" in row for row in scope), scope
+    findings = ledger.property_findings()
+    assert findings == [row for row in scope if row["unused_properties"]], findings
+    assert _finding_rows(ledger) == CORPUS_FINDINGS[FINDING_FIXTURE], findings
+    whole = [row for row in scope if not row["unused_properties"]]
+    assert len(whole) == 1, [row["name"] for row in whole]
+    # The one whole row answers the fact name, read through the owner.
+    assert entry_coverage.pair_answer(whole[0]) == entry_coverage.WHOLE_BLOCK_FACT, whole[0]
+
+    # A fixture in the scan scope with no finding shows the two sets are not the same set, and every row in it
+    # answers the fact name.
+    tags = run_pipeline(converter_module, "tags.xml", tmp_path / "tags")
+    assert tags is not None, "tags.xml"
+    assert tags.ledger.block_rows(), tags.ledger.block_rows()
+    assert tags.ledger.property_findings() == [], tags.ledger.property_findings()
+    assert all(
+        entry_coverage.pair_answer(row) == entry_coverage.WHOLE_BLOCK_FACT for row in tags.ledger.block_rows()
+    ), [entry_coverage.pair_answer(row) for row in tags.ledger.block_rows()]
+
+
+def test_the_pair_answer_names_one_fact_per_entry_through_the_owner(converter_module, tmp_path):
+    """Rule 4's pair answer: one fact name per entry, never two.
+
+    Measured 2026-11-26 on `pbf_rules.xml`: the row the scan reads as a whole block answers `WHOLE_BLOCK_FACT`, and
+    each of the 4 difference rows answers the words `property_fact` already states, so no entry answers both. The
+    report line prints the same answer, so the report shape is one shape for both names and the marked section
+    states no second line shape.
+    """
+    parser = run_pipeline(converter_module, FINDING_FIXTURE, tmp_path / "answer")
+    assert parser is not None, FINDING_FIXTURE
+    rows = parser.ledger.block_rows()
+    answers = {row["name"]: entry_coverage.pair_answer(row) for row in rows}
+    assert len(answers) == len(rows), answers
+    for row in rows:
+        answer = entry_coverage.pair_answer(row)
+        if row["unused_properties"]:
+            assert answer == entry_coverage.property_fact(row), (row["name"], answer)
+            assert entry_coverage.NO_OUTPUT_READ in answer, answer
+            assert answer != entry_coverage.WHOLE_BLOCK_FACT, answer
+        else:
+            assert answer == entry_coverage.WHOLE_BLOCK_FACT, (row["name"], answer)
+            assert entry_coverage.NO_OUTPUT_READ not in answer, answer
+        # The report line ends with the pair answer, so the line shape is stated once.
+        assert entry_coverage.property_line(row).endswith(answer), entry_coverage.property_line(row)
+
+
+def test_the_pair_answer_inherits_the_blind_side_the_scan_states(converter_module, tmp_path):
+    """Rule 4's blind side, held by `test_the_scan_cannot_see_a_field_the_parse_stored_empty`: the pair answers on
+    the set the parse kept, so an entry the parse stored nothing for answers the fact name.
+
+    Measured 2026-11-26 on `tests/fixtures/tags.xml`, the entry `web`: the read record names 4 fields, the parse
+    kept 1, so the pair the scan holds is 1 field against the row's 1 kept field and the answer is the fact name,
+    while the difference half of the answer names none. The pin reads the blind side through the same rule the
+    earlier pin holds, so the fact is stated as inheriting it and not as answering it.
+    """
+    parser = run_pipeline(converter_module, "tags.xml", tmp_path)
+    assert parser is not None, "tags.xml"
+    ledger = parser.ledger
+    entry = next(e for e in ledger.entries() if e.get("name") == "web")
+    mark = ledger.mark_for(entry)
+    row = next(r for r in ledger.block_rows() if r["name"] == "web")
+    assert ledger.captured_fields(mark) == ("color",), ledger.captured_fields(mark)
+    read = sorted(set(mark["captured"].used_keys()) - entry_coverage.NON_FIELD_KEYS)
+    assert read == ["color", "comments", "description", "disable_override"], read
+    assert row["unused_properties"] == (), row["unused_properties"]
+    assert entry_coverage.pair_answer(row) == entry_coverage.WHOLE_BLOCK_FACT, entry_coverage.pair_answer(row)
+    assert ledger.property_findings() == [], ledger.property_findings()
+
+
 # --- 4. The report section ------------------------------------------------
 
 
-def _report(tmp_path, fixture):
-    result = run_script("panorama_to_terraform.py", str(FIXTURES_DIR / fixture), "--output-dir", str(tmp_path))
+def _report(tmp_path, fixture, extra_args: tuple = ()):
+    result = run_script(
+        "panorama_to_terraform.py",
+        str(FIXTURES_DIR / fixture),
+        "--output-dir",
+        str(tmp_path),
+        *extra_args,
+    )
     assert result.returncode == 0, result.stderr
     return (tmp_path / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
 
@@ -874,12 +997,64 @@ def test_finding_does_not_change_the_exit_code(tmp_path):
     assert entry_coverage.PROPERTY_HEADING in (tmp_path / "exit" / entry_coverage.REPORT_FILE).read_text()
 
 
+def test_the_pair_answer_is_a_coverage_fact_that_cannot_move_the_exit_code(converter_module, tmp_path):
+    """`docs/ARCHITECTURE.md` §4.6 rule 1, the half decision 4 took: a fact that compares two sets is a coverage
+    fact, so the exit code stays with the rules that read the files. Measured 2026-11-26 on `pbf_rules.xml`: the run
+    that declares no pair and the run that declares the pairs its own rows name both exit 0, and the run that
+    marked a unit prints the fact name in its report. The pair that reads the marked units through its owner shows
+    the two runs differ only in the declaration, and the declared run's gate report names no finding for the fact, so
+    the severity `docs/ARCHITECTURE.md` §4.6 rule 1 states for a coverage fact, `sanity_checks.WARN`, cannot move the
+    exit code. The pin that holds the same rule for the difference half is
+    `test_finding_does_not_change_the_exit_code`, and it is unchanged.
+    """
+    plain_dir = tmp_path / "plain"
+    assert run_pipeline(converter_module, FINDING_FIXTURE, plain_dir) is not None, FINDING_FIXTURE
+    rows = record_rows(plain_dir)[unit_manifest]
+    pairs = declaration_pairs(rows, MODE_VALUES[0])
+    assert pairs, "the pin needs a declaration so a run marks a unit"
+    assert not unit_manifest.marked_units(rows), "a run that declares no pair marks no unit"
+
+    plain = run_script(
+        "panorama_to_terraform.py",
+        str(FIXTURES_DIR / FINDING_FIXTURE),
+        "--output-dir",
+        str(tmp_path / "exit_plain"),
+    )
+    declared = run_script(
+        "panorama_to_terraform.py",
+        str(FIXTURES_DIR / FINDING_FIXTURE),
+        "--output-dir",
+        str(tmp_path / "exit_declared"),
+        *declaration_args(pairs),
+    )
+    assert plain.returncode == declared.returncode == 0, plain.stdout + declared.stdout
+    report = (tmp_path / "exit_declared" / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    assert entry_coverage.WHOLE_BLOCK_FACT in report, report
+    assert unit_manifest.marked_units(record_rows(tmp_path / "exit_declared")[unit_manifest]), report
+    assert not unit_manifest.marked_units(record_rows(tmp_path / "exit_plain")[unit_manifest]), plain.stdout
+
+    # Measured 2026-11-26 on the declared run's gate report: it names 0 FAIL, so the exit code is the answer the
+    # rules that read the files gave, and the fact name appears nowhere in it, so the fact holds no gate finding of
+    # its own. The severity `docs/ARCHITECTURE.md` §4.6 rule 1 states for a coverage fact is `sanity_checks.WARN`,
+    # which is the data the gate reports through its own shape and cannot move the exit code.
+    gate = (tmp_path / "exit_declared" / "SANITY_REPORT.txt").read_text(encoding="utf-8")
+    assert entry_coverage.WHOLE_BLOCK_FACT not in gate, gate
+    assert "Result: PASS (0 FAIL" in gate, gate
+    assert sanity_checks.WARN in gate, gate
+
+
 # --- 5. The console block ---------------------------------------------------
 
 
-def _console(fixture, tmp_path):
+def _console(fixture, tmp_path, extra_args: tuple = ()):
     """Run the converter on one fixture. Returns (exit code, console text)."""
-    result = run_script("panorama_to_terraform.py", str(FIXTURES_DIR / fixture), "--output-dir", str(tmp_path))
+    result = run_script(
+        "panorama_to_terraform.py",
+        str(FIXTURES_DIR / fixture),
+        "--output-dir",
+        str(tmp_path),
+        *extra_args,
+    )
     return result.returncode, result.stdout
 
 
@@ -941,6 +1116,47 @@ def test_the_console_prints_no_property_block_for_a_run_with_no_finding(tmp_path
     code, console = _console("tags.xml", tmp_path)
     assert code == 0
     assert "Property findings" not in console, console
+
+
+def test_the_pair_answer_prints_in_the_report_only_and_moves_no_console_kind(converter_module, tmp_path):
+    """Decision 4's print shape: the pair answer prints in the report, and the console keeps the kinds §3.2 states,
+    so no sixth kind appears and `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place`
+    is unchanged.
+
+    Measured 2026-11-26 on `pbf_rules.xml`: the run that declares the pairs its own rows name prints the fact name
+    in its report and prints no console line that names it, and its console block is the same lines as the run that
+    declares nothing. The block is built from the difference subset, so a whole-block entry reaches no console line:
+    `property_console_lines` names the entry and the fact, and the fact it names is the difference half.
+    """
+    parser = run_pipeline(converter_module, FINDING_FIXTURE, tmp_path / "run")
+    assert parser is not None, FINDING_FIXTURE
+    ledger = parser.ledger
+    rows = record_rows(tmp_path / "run")[unit_manifest]
+    pairs = declaration_pairs(rows, MODE_VALUES[0])
+    whole = [row for row in ledger.block_rows() if not row["unused_properties"]]
+    assert whole, "the pin needs an entry the scan reads as a whole block"
+
+    generator = converter_module.TerraformGenerator(output_dir=str(tmp_path / "gen"))
+    # The block is built from the difference subset, so an entry the scan reads as a whole block reaches no line.
+    findings = [row for row in ledger.block_rows() if row["unused_properties"]]
+    assert ledger.property_findings() == findings, ledger.property_findings()
+    assert findings and whole, (findings, whole)
+    block = entry_coverage.property_console_lines(findings, generator._report_scope_path)
+    assert block, block
+    assert entry_coverage.WHOLE_BLOCK_FACT not in block, block
+    assert all(entry_coverage.property_fact(f) in line for f, line in zip(findings, block[1:], strict=True)), block
+
+    code_plain, console_plain = _console(FINDING_FIXTURE, tmp_path / "out_plain")
+    code_declared, console_declared = _console(FINDING_FIXTURE, tmp_path / "out_declared", declaration_args(pairs))
+    assert code_plain == code_declared == 0, console_plain + console_declared
+    scan_lines = [line for line in console_plain.splitlines() if line.startswith(container_coverage.CONSOLE_PREFIX)]
+    declared_lines = [
+        line for line in console_declared.splitlines() if line.startswith(container_coverage.CONSOLE_PREFIX)
+    ]
+    assert scan_lines == declared_lines, scan_lines
+    assert not [line for line in scan_lines if entry_coverage.WHOLE_BLOCK_FACT in line], scan_lines
+    report = (tmp_path / "out_declared" / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    assert entry_coverage.WHOLE_BLOCK_FACT in report, report
 
 
 def _gap_run(converter_module, tmp_path, fixture):

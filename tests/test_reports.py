@@ -20,12 +20,21 @@ grouped by the same F3.9 rule this module pins, so the section adds no unit rule
 It names a unit by name, never by directory, and it prints only when the codebase set names a unit the run set
 does not, so a run that read the whole codebase writes the report bytes it writes today. The section is report
 content and prints no console line; the console shape has one owner, `container_coverage.console_line`.
+
+Epic 14 (`docs/IMPORT_BINDING.md` §2, decision 4, taken 2026-11-26): the report gains one section after the unit
+section that names the units the run marked and the entries inside them the property scan reads as a whole block.
+The marked units are read through `unit_manifest.marked_units` and the value through `unit_manifest.mode_of`, so the
+section states no unit rule, no row field and no value of the pair, and the entry lines read the pair answer through
+`entry_coverage.pair_answer`, so one line shape prints both the fact name and the difference. The section prints only
+when the run marked a unit, so a run that declares nothing writes the report bytes it writes today, and it is report
+content that prints no console line, so the console keeps the kinds `docs/ARCHITECTURE.md` §3.2 states.
 """
 
 import re
 import shutil
 
 import codebase_state
+import container_coverage
 import entry_coverage
 import ownership
 import reference_edges
@@ -37,15 +46,23 @@ from conftest import (
     CODEBASE_FIXTURE,
     FIXTURES_DIR,
     JOIN_RECORDS,
+    MODE_VALUES,
     RUN_FIXTURE,
+    declaration_args,
+    declaration_pairs,
     partial_run,
     record_rows,
+    run_pipeline,
     run_script,
+    written_bytes,
 )
 
 FIXTURE = "report_grouping.xml"
 # The fixture that produces a reference cycle, so one report can show a finding section before the unit section.
 CYCLE_FIXTURE = "reference_cycle.xml"
+# The fixture a pair read through `declaration_pairs` marks a unit inside, and the fixture that trips a property
+# finding, so one report shows a finding section, the unit section and the marked section together.
+MARKED_FIXTURE = "dependency_wiring.xml"
 
 # A report section: an 80-character rule, the title, the rule, the body.
 SECTION_RE = re.compile(r"={80}\n(?P<title>[^\n]+)\n={80}\n(?P<body>.*?)(?=(?:={80}\n|\Z))", re.S)
@@ -331,16 +348,19 @@ def test_protocol_report_is_byte_identical_between_runs(tmp_path):
 
 ENTRY_LINES = "Entry lines are grouped by"
 UNIT_HEADLINE = f"--- {entry_coverage.UNIT_HEADING} ---"
+MARKED_HEADLINE = f"--- {entry_coverage.MARKED_HEADING} ---"
 CONVERTER = "panorama_to_terraform.py"
 
 
-def _unit_pair(tmp_path, first=CODEBASE_FIXTURE, second=RUN_FIXTURE):
+def _unit_pair(tmp_path, first=CODEBASE_FIXTURE, second=RUN_FIXTURE, extra_args: tuple = ()):
     """The two runs as `tests/conftest.py::partial_run` states them, and the two row sets the section names.
 
     Each set is read through the module that owns its shape, so this module states no reader, no join key and no
-    merge of its own. Returns the codebase directory, the run directory, the rows the run built, and the merged rows.
+    merge of its own. `extra_args` reaches the second run, so a pin that reads the units a run marked passes the
+    declaration built from `record_rows` over the first run's rows. Returns the codebase directory, the run
+    directory, the rows the run built, and the merged rows.
     """
-    codebase, run, _second_run = partial_run(first, second, tmp_path)
+    codebase, run, _second_run = partial_run(first, second, tmp_path, extra_args)
     held, built = record_rows(codebase), record_rows(run)
     merged = {module: codebase_state.merge_rows(JOIN_RECORDS[module], held[module], built[module]) for module in held}
     return codebase, run, built[unit_manifest], merged[unit_manifest]
@@ -417,14 +437,15 @@ def test_the_unit_section_prints_only_when_a_unit_the_run_did_not_read_is_in_the
     assert first_report == second_report, "a run that read the whole codebase writes the report bytes it writes today"
 
 
-def test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders(tmp_path):
-    """The unit section is the last finding section, before the entry lines.
+def test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders(converter_module, tmp_path):
+    """The unit section is the last finding section, before the entry lines, and the marked section prints after it.
 
     One fixture produces a reference cycle and the pair produces the unit section, so one report shows a finding
-    section and the unit section together. The order is read through the headings their owners state.
+    section and the unit section together. The order is read through the headings their owners state. No committed
+    fixture pair prints a cycle section and the marked section in one report, because only `CYCLE_FIXTURE` trips a
+    cycle and the units its rows name are named by no pair from another fixture's rows, so the marked position is
+    measured on its own pair: the property findings, the unit section, the marked section, then the entry lines.
     """
-    _codebase, run, _run_rows, _merged_rows = _unit_pair(tmp_path, first=CYCLE_FIXTURE)
-    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
     declared = [
         entry_coverage.GAP_HEADING,
         entry_coverage.PROPERTY_HEADING,
@@ -434,12 +455,34 @@ def test_the_unit_section_prints_after_the_sections_the_report_rule_already_orde
         state_coverage.OWNERSHIP_HEADING,
         state_coverage.DRIFT_HEADING,
         entry_coverage.UNIT_HEADING,
+        entry_coverage.MARKED_HEADING,
     ]
+
+    _codebase, run, _run_rows, _merged_rows = _unit_pair(tmp_path / "cycle", first=CYCLE_FIXTURE)
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
     present = [heading for heading in declared if f"--- {heading} ---" in report]
     positions = [report.index(f"--- {heading} ---") for heading in present]
     assert positions == sorted(positions), present
     assert report.index(ENTRY_LINES) > positions[-1]
     assert entry_coverage.UNIT_HEADING in present
+
+    # The marked position: a pair read through `declaration_pairs`, so the second run marks a unit. Measured
+    # 2026-11-26 on (`CODEBASE_FIXTURE`, `MARKED_FIXTURE`): 9 pairs, and the report prints the gap section, the
+    # property findings, the unit section and the marked section, in that order, before the entry lines.
+    _codebase, marked_run, rows, _scan, pairs = _marked_pair(converter_module, tmp_path / "marked")
+    assert len(pairs) == 9, pairs
+    assert unit_manifest.marked_units(rows), rows
+    marked_report = (marked_run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    present = [heading for heading in declared if f"--- {heading} ---" in marked_report]
+    positions = [marked_report.index(f"--- {heading} ---") for heading in present]
+    assert positions == sorted(positions), present
+    assert marked_report.index(ENTRY_LINES) > positions[-1]
+    assert present == [
+        entry_coverage.GAP_HEADING,
+        entry_coverage.PROPERTY_HEADING,
+        entry_coverage.UNIT_HEADING,
+        entry_coverage.MARKED_HEADING,
+    ], present
 
 
 def test_the_unit_section_names_no_directory_and_groups_by_the_f3_9_rule(converter_module, tmp_path):
@@ -498,3 +541,236 @@ def test_the_report_prints_no_console_line_for_the_unit_section(tmp_path):
         for part in (entry_coverage.BUILT_PART, entry_coverage.RECORD_ONLY_PART):
             assert part not in normalized, stdout_line
         assert normalized not in shapes, stdout_line
+
+
+# --- the marked-unit section (Epic 14, decision 4 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26) ---
+
+
+def _marked_pair(converter_module, tmp_path, first=CODEBASE_FIXTURE, second=MARKED_FIXTURE):
+    """The pair as `tests/conftest.py::partial_run` states it, with the declaration the second run reads.
+
+    The pairs are read through `declaration_pairs` over the rows the first run wrote, and the argument shape through
+    `declaration_args`, so this module states no pair rule, no path shape and no value of the pair. Returns the
+    codebase directory, the run directory, the rows the run built, the scan rows for the entries the run read, and
+    the pairs the declaration names.
+    """
+    measured = tmp_path / "measured"
+    assert run_pipeline(converter_module, first, measured) is not None, first
+    pairs = declaration_pairs(record_rows(measured)[unit_manifest], MODE_VALUES[0])
+    codebase, run, parser = partial_run(first, second, tmp_path / "pair", declaration_args(pairs))
+    return codebase, run, record_rows(run)[unit_manifest], parser.ledger.block_rows(), pairs
+
+
+def _shape(line: str) -> str:
+    """A line read as its words, so a pin measures content and not the column padding the report shape uses."""
+    return " ".join(line.strip().split())
+
+
+def _marked_section(report: str) -> dict[str, list[str]]:
+    """The marked section as {scope title: lines}, in the order the report prints them: one unit line, then the
+    entry lines for the entries inside that unit. The rule paragraph is the report rule's own statement, so the pin
+    reads the body only, and each line is read as its words.
+    """
+    text = report[report.index(MARKED_HEADLINE) + len(MARKED_HEADLINE) : report.index(ENTRY_LINES)]
+    groups: dict[str, list[str]] = {}
+    current = None
+    rule_seen = False
+    for line in text.splitlines():
+        if not line:
+            continue
+        if not rule_seen:
+            rule_seen = True
+            continue  # the rule paragraph, which is the report rule's own statement
+        if line.startswith("  "):
+            groups[current].append(_shape(line))
+        else:
+            current = line
+            groups.setdefault(line, [])
+    return groups
+
+
+def test_the_marked_section_names_the_units_the_run_marked_through_the_record(converter_module, tmp_path):
+    """Decision 4 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26: the section names the units this run marked, read
+    through `unit_manifest.marked_units`, and the value through `unit_manifest.mode_of`, so the report states no unit
+    rule, no row field and no value of the pair. The line shape is `entry_coverage.marked_unit_line`, stated once.
+
+    Measured 2026-11-26 on the pair (`CODEBASE_FIXTURE`, `MARKED_FIXTURE`): 9 pairs, and the rows the run built show
+    1 marked unit, `vsys1`, stating the first value of the pair. The run's other unit read entries but was not
+    marked, so it prints no line here.
+    """
+    _codebase, run, rows, _scan_rows, pairs = _marked_pair(converter_module, tmp_path)
+    assert len(pairs) == 9, pairs
+    marked = unit_manifest.marked_units(rows)
+    assert len(marked) == 1, [unit_manifest.mode_of(row) for row in rows]
+    assert all(unit_manifest.mode_of(row) == MODE_VALUES[0] for row in marked), marked
+
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    section = _marked_section(report)
+    unit_lines = [line for lines in section.values() for line in lines if entry_coverage.MARKED_PART in line]
+    assert len(unit_lines) == len(marked), unit_lines
+    for row in marked:
+        line = _shape(entry_coverage.marked_unit_line(row))
+        assert any(line in lines for lines in section.values()), (line, section)
+        assert unit_manifest.unit_name(unit_manifest.facts_of(row)) in line, line
+        assert unit_manifest.mode_of(row) in line, line
+
+
+def test_the_marked_section_prints_one_line_per_entry_in_the_scan_scope(converter_module, tmp_path):
+    """One line per entry inside a unit the run marked, read through the scan's own row shape, and the fact part is
+    `pair_answer`, so the same shape prints the fact name for an entry the scan reads as a whole block and the
+    difference for the rest. An entry inside a unit the run did not mark prints no line, so the section prints the
+    marked unit's entries and not the whole scan scope.
+
+    Measured 2026-11-26 on the pair (`CODEBASE_FIXTURE`, `MARKED_FIXTURE`): 21 scan rows, 11 of them inside the
+    marked unit and printed, 10 inside the run's unmarked unit and not printed. Of the 11, 10 answer the fact name
+    and 1 answers a difference.
+    """
+    _codebase, run, rows, scan, _pairs = _marked_pair(converter_module, tmp_path)
+    marked = {unit_manifest.facts_of(row) for row in unit_manifest.marked_units(rows)}
+    inside = [row for row in scan if unit_manifest.facts_of(row) in marked]
+    outside = [row for row in scan if unit_manifest.facts_of(row) not in marked]
+    assert len(inside) == 11 and len(outside) == 10, (len(inside), len(outside))
+
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    section = _marked_section(report)
+    entry_lines = [line for lines in section.values() for line in lines if entry_coverage.MARKED_PART not in line]
+    assert len(entry_lines) == len(inside), entry_lines
+    for row in inside:
+        line = _shape(entry_coverage.property_line(row))
+        assert any(line in lines for lines in section.values()), (line, section)
+        # The fact part of the line is the pair answer, and only the vsys part follows it.
+        answer = entry_coverage.pair_answer(row)
+        after = line[line.rindex(answer) + len(answer) :].strip()
+        assert after == "" or after == f"[{row.get('vsys', '')}]", (line, answer, after)
+
+    whole = [row for row in inside if not row["unused_properties"]]
+    difference = [row for row in inside if row["unused_properties"]]
+    assert len(whole) == 10 and len(difference) == 1, (len(whole), len(difference))
+    assert all(entry_coverage.pair_answer(row) == entry_coverage.WHOLE_BLOCK_FACT for row in whole), whole
+    assert all(entry_coverage.pair_answer(row) == entry_coverage.property_fact(row) for row in difference), difference
+    # One fact name per entry, so no entry prints both.
+    assert not any(entry_coverage.WHOLE_BLOCK_FACT in entry_coverage.property_fact(row) for row in scan), scan
+
+
+def test_the_marked_section_prints_only_when_the_run_marked_a_unit(converter_module, tmp_path):
+    """A run that declares no pair marks no unit, so the section prints nothing and a default run's report bytes are
+    unchanged.
+
+    Measured 2026-11-26 on the pair (`CODEBASE_FIXTURE`, `MARKED_FIXTURE`): the pair run with no declaration marks
+    no unit and prints no section, and the pair run with the declaration the first run's rows name marks 1 unit and
+    prints the section. The declared report with the section taken out reads byte for byte as the plain report, so
+    every other section and the entry lines are the bytes the report rule already writes.
+    """
+    _plain_codebase, plain_run, _plain_parser = partial_run(CODEBASE_FIXTURE, MARKED_FIXTURE, tmp_path / "plain")
+    _codebase, declared_run, rows, _scan, pairs = _marked_pair(converter_module, tmp_path / "declared")
+    assert pairs, "the pin runs a run that declared a pair"
+
+    plain_report = (plain_run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    declared_report = (declared_run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    assert not unit_manifest.marked_units(record_rows(plain_run)[unit_manifest]), record_rows(plain_run)[unit_manifest]
+    assert unit_manifest.marked_units(rows), rows
+    assert MARKED_HEADLINE not in plain_report, plain_report
+    assert MARKED_HEADLINE in declared_report, declared_report
+
+    start = declared_report.index("\n" + MARKED_HEADLINE)
+    end = declared_report.index("\n" + ENTRY_LINES)
+    assert declared_report[:start] + declared_report[end:] == plain_report, declared_report
+
+
+def test_the_marked_section_groups_by_the_f3_9_rule_and_names_no_directory(converter_module, tmp_path):
+    """The section titles are the scope the export declares, read through the one grouping rule this module pins, and
+    the lines name a unit by its name and an entry by its identity, so the section states no grouping rule of its own
+    and names no directory.
+
+    Measured 2026-11-26 on the pair (`CODEBASE_FIXTURE`, `MARKED_FIXTURE`): the marked unit sits in the device scope
+    its row states, so the section has one title, `DEVICE: device1`, and each entry line sits inside it.
+    """
+    _codebase, run, rows, scan, _pairs = _marked_pair(converter_module, tmp_path)
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    section = _marked_section(report)
+    gen = converter_module.TerraformGenerator(str(tmp_path / "out"))
+    header = converter_module.TerraformGenerator._report_section_header
+    marked = {unit_manifest.facts_of(row) for row in unit_manifest.marked_units(rows)}
+
+    titles = {header(gen._report_scope_path(row)) for row in unit_manifest.marked_units(rows)}
+    assert set(section) == titles, section
+    assert titles == {"DEVICE: device1"}, titles
+
+    by_unit: dict = {}
+    for row in scan:
+        by_unit.setdefault(unit_manifest.facts_of(row), []).append(row)
+    # The unit line is read from the row the record states, because the scan row carries the pair and not the mode.
+    unit_rows = {unit_manifest.facts_of(row): row for row in unit_manifest.marked_units(rows)}
+    for facts, group in by_unit.items():
+        title = header(gen._report_scope_path(group[0]))
+        if facts in marked:
+            unit_line = _shape(entry_coverage.marked_unit_line(unit_rows[facts]))
+            assert unit_line == section[title][0], (unit_line, section[title])
+            # The entry lines are in the order the scan's own sort gives them.
+            assert section[title][1:] == [_shape(entry_coverage.property_line(row)) for row in group], (
+                title,
+                section[title],
+            )
+        else:
+            # An entry inside a unit the run did not mark prints no line, so its group has no title here.
+            assert title not in section, (title, group)
+    for facts in by_unit:
+        directory = unit_manifest.directory_name(facts, gen.sanitize_name)
+        assert directory not in report, directory
+
+
+def test_the_marked_section_is_byte_identical_between_runs(converter_module, tmp_path):
+    """Rule 7, read through the new section: two runs that declare the same pairs on the same input write the same
+    bytes, so the marked section is not a source of run-to-run difference. `tests/conftest.py::written_bytes` is the
+    whole layout, so the pin compares the report bytes, the manifest bytes and the unit directories together.
+
+    Measured 2026-11-26 on the pair (`CODEBASE_FIXTURE`, `MARKED_FIXTURE`): two runs that declare the same 9 pairs
+    write byte-identical layouts, and the report inside them contains the marked section.
+    """
+    measured = tmp_path / "measured"
+    assert run_pipeline(converter_module, CODEBASE_FIXTURE, measured) is not None, CODEBASE_FIXTURE
+    pairs = declaration_pairs(record_rows(measured)[unit_manifest], MODE_VALUES[0])
+    args = declaration_args(pairs)
+
+    first = tmp_path / "first"
+    assert run_pipeline(converter_module, MARKED_FIXTURE, first, args) is not None, MARKED_FIXTURE
+    second = tmp_path / "second"
+    assert run_pipeline(converter_module, MARKED_FIXTURE, second, args) is not None, MARKED_FIXTURE
+    assert written_bytes(first) == written_bytes(second), sorted(written_bytes(first))
+    report = (first / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    assert MARKED_HEADLINE in report, report
+
+
+def test_the_report_prints_no_console_line_for_the_marked_section(converter_module, tmp_path):
+    """The marked section is report content only, so the console prints nothing for it, and the console keeps the
+    kinds `docs/ARCHITECTURE.md` §3.2 states: the fact name reaches no console line, so no sixth kind appears and
+    `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place` is unchanged.
+
+    Measured 2026-11-26 on the pair (`CODEBASE_FIXTURE`, `MARKED_FIXTURE`): the run that declares the 9 pairs the
+    first run's rows name prints the marked section in its report and prints the same scan block lines as the run
+    that declares nothing, because the console block is built from the difference subset. The two console outputs
+    differ only in the output-directory path lines and the `.tf` count the declared run's import blocks cause, so
+    the pin compares the block lines and not the whole console.
+    """
+    _codebase, run, _rows, _scan, pairs = _marked_pair(converter_module, tmp_path)
+    report = (run / "CONVERSION_REPORT.txt").read_text(encoding="utf-8")
+    lines = [line for body in _marked_section(report).values() for line in body]
+    assert lines, "the section prints, so there is something to check is not on the console"
+
+    plain_dir = tmp_path / "plain_console"
+    assert run_pipeline(converter_module, MARKED_FIXTURE, plain_dir) is not None, MARKED_FIXTURE
+    pairs_for_run = declaration_pairs(record_rows(plain_dir)[unit_manifest], MODE_VALUES[0])
+    console_dir = shutil.copytree(plain_dir, tmp_path / "declared_console")
+    result = run_script(
+        CONVERTER,
+        str(FIXTURES_DIR / MARKED_FIXTURE),
+        "--output-dir",
+        str(console_dir),
+        *declaration_args(pairs_for_run),
+    )
+    block = [line for line in result.stdout.splitlines() if line.startswith(container_coverage.CONSOLE_PREFIX)]
+    assert block, result.stdout
+    assert not any(entry_coverage.WHOLE_BLOCK_FACT in line for line in block), block
+    for line in lines:
+        normalized = " ".join(line.split())
+        assert not any(normalized == " ".join(scan_line.split()) for scan_line in block), (line, block)

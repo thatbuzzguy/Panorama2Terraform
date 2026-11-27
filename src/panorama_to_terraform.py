@@ -6228,13 +6228,16 @@ class TerraformGenerator:
         result. Each prints in its own section, after the property section, only when it has a finding,
         and each is grouped by the same scope rule as the other sections. Section order is fixed: header,
         summary, gaps, property findings, shadows, repeated names, reference cycles, state ownership,
-        drift, then the unit section (`docs/MULTI_RUN_CODEBASE.md` §7), then the entry lines.
+        drift, then the unit section (`docs/MULTI_RUN_CODEBASE.md` §7), then the marked-unit section
+        (`docs/IMPORT_BINDING.md` §3), then the entry lines.
 
         `unit_rows` is the two row sets the unit section names: the rows the run built, and the merged rows a
         record read back. Both sets are read through `unit_manifest.units`, the one unit rule, so this writer
         states no unit rule of its own; it takes the sets and prints them. The section prints only when the
         codebase set names a unit the run set does not, so a run that read the whole codebase writes the report
-        bytes it writes today.
+        bytes it writes today. The marked-unit section names the units this run marked from the same first set,
+        through `unit_manifest.marked_units`, and prints one entry line per entry the property scan reads, so this
+        writer states no unit rule, no row field, no value of the pair and no fact name of its own.
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -6335,6 +6338,26 @@ class TerraformGenerator:
                     lines.append(self._report_section_header(path))
                     for row in group:
                         lines.append(entry_coverage.unit_line(row, entry_coverage.unit_part(row, run_units)))
+
+        # Decision 4 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26: the units this run marked, and the entries
+        # inside them that read as zero change. The section prints only when the run marked a unit, so a run that
+        # declares no pair writes the report bytes it writes today. The marked units are read through
+        # `unit_manifest.marked_units`, the value through `unit_manifest.mode_of`, and each entry line through the
+        # property scan's own row shape, so this writer states no unit rule, no row field, no value of the pair and no
+        # fact name of its own. Report content only, because the fact compares two sets (`docs/ARCHITECTURE.md`
+        # §3.2), and the grouping is the F3.9 rule the other sections use, so no second grouping rule appears.
+        marked = unit_manifest.marked_units(unit_rows[0]) if unit_rows else []
+        if marked:
+            lines.extend(["", f"--- {entry_coverage.MARKED_HEADING} ---", entry_coverage.MARKED_RULE])
+            by_unit: dict = {}
+            for row in ledger.block_rows():
+                by_unit.setdefault(unit_manifest.facts_of(row), []).append(row)
+            for path, group in self._group_by_scope(marked):
+                lines.append(self._report_section_header(path))
+                for unit in group:
+                    lines.append(entry_coverage.marked_unit_line(unit))
+                    for row in by_unit.get(unit_manifest.facts_of(unit), []):
+                        lines.append(entry_coverage.property_line(row))
 
         lines.extend(
             [

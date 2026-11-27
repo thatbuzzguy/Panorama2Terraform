@@ -267,14 +267,20 @@ def record_rows(output_dir) -> dict:
 # from here, so no test module states it a second time. `run_pipeline` runs in process, so the ledger is the second
 # run's own ledger, and its unit set is `unit_manifest.units` over it. The copy is the codebase the second run
 # wrote into, so the bytes inside a unit the second run did not build are the bytes the first run wrote.
-def partial_run(first_fixture: str, second_fixture: str, out_dir) -> tuple:
-    """The two runs, as the pattern states them: returns (codebase_dir, partial_dir, second_run_parser)."""
+def partial_run(first_fixture: str, second_fixture: str, out_dir, extra_args: tuple = ()) -> tuple:
+    """The two runs, as the pattern states them: returns (codebase_dir, partial_dir, second_run_parser).
+
+    `extra_args` is appended to the second run's argv, the same way `run_pipeline` takes it, so a pin that reads
+    the units a run marked can pass the declaration the second run reads. A pin that needs the declaration cannot
+    build it after the second run, so the pairs it reads come from the rows the first run wrote, and the pins that
+    measure the marked units read those rows through `record_rows` before the second run.
+    """
     codebase = Path(out_dir) / "codebase"
     partial = Path(out_dir) / "partial"
     first = run_pipeline(panorama_to_terraform, first_fixture, codebase)
     assert first is not None, f"{first_fixture}: the run refused the input"
     shutil.copytree(codebase, partial)
-    second = run_pipeline(panorama_to_terraform, second_fixture, partial)
+    second = run_pipeline(panorama_to_terraform, second_fixture, partial, extra_args)
     assert second is not None, f"{second_fixture}: the run refused the input"
     return codebase, partial, second
 
