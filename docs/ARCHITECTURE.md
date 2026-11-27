@@ -581,9 +581,10 @@ because its fact compares two entries and the console shape names one identity.
 Pinned by `tests/test_ownership.py`, including the fixed line shape, the grouping, the section order,
 and the no-console-line run.
 
-**The state scan** (F5.6) adds two fact kinds, in `state_coverage.py`, and the report prints them in
-their own two sections after the shadow section, in this order: ownership, then drift. Each section
-prints only when it has a finding, and both use one fixed shape:
+**The state scan** (F5.6) adds three fact kinds, in `state_coverage.py`, and the report prints them in
+their own three sections after the shadow section, in this order: ownership, then drift, then the entries that
+need a serial the state document names no value for. Each section prints only when it has a finding, and each uses
+one fixed shape:
 
 ```text
   line <source line>  <object type>/<entry name>  <matrix row>  state source: <state name> (<resource address>)
@@ -601,6 +602,30 @@ one finding stays on one line. A property the comparison table maps prints both 
 the state name the value was read under, in the form `<parse key> as <state name>`; a property the table
 has no row for prints the one name both sides hold.
 
+The serial line names no source line, because a state entry has none, and names the unit the run marked:
+
+```text
+  <object type>/<entry name>  state source: <state name> (<resource address>)  unit: <unit>  mode: <mode>  needs a serial the state document names no value for
+```
+
+The third fact kind is the serial for a bound unit (decision 6 of
+[`IMPORT_BINDING.md`](IMPORT_BINDING.md) §2, taken 2026-11-26, owned by `state_coverage.py` rule 7). The
+value is the attribute the state document holds for the entry, read through the same location walk as the
+key, and the two names for it are `state_coverage.STATE_SERIAL_KEY`, the field `LOCATION_SCHEMA` declares,
+and `state_coverage.STATE_SERIAL_FACT`, the §2.2 fact that field fills through `STATE_SCOPE_KEYS`, so no
+second name list exists. An entry needs the value when the location the document holds for it places it in a
+sub-block that declares the field, which `entry_needs_serial` answers through `LOCATION_SCHEMA`, so a `shared`
+entry needs none and a sub-block the row declares for another fact needs none. The section prints only when
+the run read a state document and marked a unit, because the fact needs both halves, so a run that read no
+state document, or read one and declared no pair, writes the report bytes it writes today. The entry is named
+by the same key the ownership section reads it with, and the bound answer is read through `unit_manifest`, so
+no second identity key and no second unit rule appears. The serial is read from the location, which the
+identity keys keep out of the property set, so no drift line compares it, and `VALUE_VARIABLES` already states
+the field as a variable, so the block prints the reference and the id states the value through the same row:
+the id shape is not changed, and `decode_id` declares no field for it. A run that reads no state document reads
+no entry, so it declares no serial and the ids for entries that need one stay the placeholders the report
+already names for the operator.
+
 The ownership key is §2.1 identity as the F3.9 rule reads it: the matrix row, the entry name, and the
 five declared facts, read from the `location` block the state document holds, through the block names
 `LOCATION_SCHEMA` declares. The `Shared` fallback is never in the key, because it is a parse fallback
@@ -610,7 +635,7 @@ converter never emits, so an entry placed there is not keyed. The first state en
 wins, in document order, because one run entry is one finding (the F5.4 rule). The scan scope is the
 property rule on both sides: an entry no row covers is not a finding, and a state resource whose type
 has no row is not in the index. A run with no declared state source has no state to read, so it prints
-neither section.
+none of the three sections.
 
 Drift compares only a property the matrix row declares. The state name a property is read under comes
 from `state_coverage.STATE_PROPERTY_NAMES`, the one mapping rule, and a row exists only where the two
@@ -634,13 +659,26 @@ shapes the measurement cannot state as one name, and the work each needs, are re
 A value is compared as the two sides hold it, so member order is part of the value. A drift fact needs an
 ownership fact, so the drift section is a subset of the ownership section. The state scan is not an
 output, so it reads captured values through the non-recording read (`entry_coverage.RecordingDict.value`)
-and cannot move a property finding. Both facts are grouped by the same F3.9 scope rule, the console prints
-no state line because each fact names two identities and a second position, and both are operator actions,
-so neither changes the exit code, which the F4.1 gate still decides.
+and cannot move a property finding. All three facts are grouped by the same F3.9 scope rule, the console
+prints no state line because each fact names two identities or a second position, and all three are operator
+actions, so none changes the exit code, which the F4.1 gate still decides.
 Pinned by `tests/test_state_coverage.py`, including the fixed line shapes, the key, the scan scope on
 both sides, the grouping, the property-read parity, the no-state run, the measured table rows, the mapped
 pair read through the state document, the same-name rule where the table has no row, and the scan reading
-the mapping only through the table.
+the mapping only through the table. The serial fact is pinned by its own group, including
+`::test_the_serial_is_read_through_the_entry_shape_and_the_one_name`,
+`::test_the_block_and_the_id_state_the_same_fact_through_the_shape_table`,
+`::test_a_run_that_reads_no_state_document_declares_no_serial_and_writes_the_bytes_it_writes_today`,
+`::test_a_bound_unit_with_an_entry_that_needs_a_serial_and_has_none_reports_one_line`,
+`::test_the_serial_finding_does_not_move_the_exit_code_and_prints_no_console_line`,
+`::test_the_serial_fact_adds_no_source_kind_and_no_input_shape_row`, and
+`::test_the_serial_fact_names_no_second_identity_key_and_no_new_fact_key`. The printing half is pinned by
+`tests/test_reports.py::test_the_serial_section_prints_only_when_a_run_read_a_state_document_and_marked_a_unit`,
+`::test_the_serial_section_is_byte_identical_between_runs`, and the section-order pin
+`::test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders`; the declaration half is
+pinned by `tests/test_variables.py::test_the_declaration_set_holds_the_serial_name_only_for_a_run_that_read_a_value_for_it`.
+The pins that read the serial content read it through `tests/conftest.py::serial_content`, because the committed
+corpus holds no state entry that needs the serial inside a unit a declaration can mark, so no committed byte moves.
 
 Rows are grouped with the F3.9 scope rule (`_report_scope_path`), the same rule
 the interface and manual reports use, so the same name in two device groups is two
@@ -1671,7 +1709,12 @@ readers refuse a row that is not the declared shape.
 
 A field the generator does not emit is not in the id. The provider's `location.device_group` row has a
 `panorama_device` field, and the docs example states one, but no parse fact names a device, so the tool
-states no device fact. Blocks print in unit order, then local-name order, and no block names a
+states no device fact. The only value for `ngfw_device` that reaches an id is the one a state document states
+for an entry, read as a reference source (decision 6 of [`IMPORT_BINDING.md`](IMPORT_BINDING.md) §2, taken
+2026-11-26, owned by `state_coverage.py` rule 7), so `decode_id` declares no field of its own: the serial rides
+inside the location object the id already declares. A run that reads no state document holds no value, so its
+ids for entries that need a device stay the placeholders the report names for the operator, and both golden
+sets are unchanged. Blocks print in unit order, then local-name order, and no block names a
 timestamp or a path.
 
 The four `*_policy_rules` types write no block, and each rule entry is one WARN finding, because their

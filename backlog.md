@@ -942,10 +942,11 @@ restated here; they are in the record and the git history. Only the open items a
   open here because a plan needs a device. The managed boundary is still not built.
 - Open facts for Epic 14, recorded here because no offline measurement reads them (the rules are in
   `docs/IMPORT_BINDING.md`):
-  1. The device serial for a bound unit, and which declared source states it. The export names a device as a
-     hostname, so no serial reaches the parse and `unit_manifest.FACT_KEYS` holds no serial. A site value the
-     operator declares is the half that can be measured offline on a committed fixture; the fact a live target
-     states is not in any committed response.
+  1. The device serial a live target states for a bound unit. The export names a device as a hostname, so no serial
+     reaches the parse. The offline half is built: the value a state document holds for an entry is read through
+     `src/state_coverage.py` rule 7, and an entry that needs the field and names none is one report line, so
+     `unit_manifest.FACT_KEYS` holds no serial key. What stays here is the half no committed response holds: the
+     serial a live target states, which is the value `target` cannot name from an export.
   2. Whether `panorama_device` has to be stated in an id for a bound unit. The field is the finding above: the
      pinned schema declares it for `location.device_group` and the generator emits no device fact. The mode
      decision decides whether an id needs one.

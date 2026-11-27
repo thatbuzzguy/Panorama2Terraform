@@ -31,13 +31,16 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
    name does not depend on the other units in the run. A change to one of the five scope facts moves the
    address, the directory, and the id together, which is the move fact recorded in `backlog.md`.
 
-3. **An id states only what the block states (`CODEBASE_ASSEMBLY.md` §7 rule 5), so no id can name a
-   device.** `VALUE_VARIABLES` maps `ngfw_device` to a variable, so the block prints the reference and the
-   id states the value the run read. The export states a device as a hostname, so no value reaches the
-   parse, and `unit_manifest.FACT_KEYS` holds no serial. Every unit that places an entry in a `vsys`, a
-   template `vsys`, or an `ngfw` location therefore writes an id with no device, and `location.device_group`
-   declares `panorama_device` in the pinned schema while the generator emits no field for it. For a
-   migration these ids are placeholders the operator fills; for a bound unit they are not ids.
+3. **An id states only what the block states (`CODEBASE_ASSEMBLY.md` §7 rule 5), so no id can name a device read
+   from an export.** `VALUE_VARIABLES` maps `ngfw_device` to a variable, so the block prints the reference and the
+   id states the value the run read. The export states a device as a hostname, so no value reaches the parse from an
+   export, and `unit_manifest.FACT_KEYS` holds no serial. A value reaches the run only from a state document read as
+   a reference source, which decision 6 took on 2026-11-26 and `state_coverage.py` rule 7 owns. Every entry that
+   places an entry in a `vsys`, a template `vsys`, or an `ngfw` location and holds no value for the fact therefore
+   writes an id with no device, and `location.device_group` declares `panorama_device` in the pinned schema while the
+   generator emits no field for it. For a migration these ids are placeholders the operator fills; for a bound unit
+   they are not ids. The bound half, and the report fact for an entry that needs the serial and names none, is
+   decision 6's.
 
 4. **The four `*_policy_rules` types cannot be bound with the shape the emitter writes.** The block is one
    object per rule type per unit that iterates that unit's rows, so an instance address is
@@ -98,8 +101,8 @@ id, and the facts an id needs for a codebase that manages a device instead of bu
 
 ## 2. The decisions to take
 
-Each decision names what it needs. Decisions 1, 2, 3 and 4 are taken, so the pieces that read them can be written;
-the rest are untaken, so no piece can be written from them yet.
+Each decision names what it needs. Decisions 1, 2, 3, 4 and 6 are taken, so the pieces that read them can be
+written; the rest are untaken, so no piece can be written from them yet.
 
 1. **The mode values, and the level the mode sits at. Taken 2026-11-25: the mode stops at the unit.** Two
    values, and each names the plan outcome for one unit: the entries are imported, or the entries are added. The
@@ -244,14 +247,59 @@ the rest are untaken, so no piece can be written from them yet.
    it reads the unit through `unit_manifest.units` and the mode through the record, so it states no unit rule
    of its own. Decision needed: whether the completeness half is the same rule or a second rule.
 
-6. **The device fact for a bound unit.** An id for a `vsys`, a template `vsys`, or an `ngfw` location needs the
-   serial the export cannot carry. Decision needed: which declared source states it. The two shapes are a site
-   value the operator declares, read through `site_data.py` so the block and the id print the same fact
-   through `VALUE_VARIABLES`, and the device fact a live target states, which no committed response holds
-   (`API_CONVERSION_PATH.md` §4). The first shape is measurable offline on a committed fixture, so it is the
-   half the project can write; the second stays in `backlog.md`. The value must come from a source the
-   provenance record can name, so `ARCHITECTURE.md` §3.3 reaches it, and the rule that a run with no network
-   passes CI is unchanged.
+6. **The device fact for a bound unit. Taken 2026-11-26: the serial comes from a state document, read through
+   `state_coverage.py`.** Four answers, and the owner each answer needs.
+
+   - **The source is the state document, read as a reference source.** The serial for an entry is the value the
+     document holds for it, read through `state_coverage.py`, the one state reader, and the module names the value
+     once: `STATE_SERIAL_KEY` is the field the document declares it with and `STATE_SERIAL_FACT` is the §2.2 fact
+     that field fills through `STATE_SCOPE_KEYS`, so no second name list appears and `FACT_KEYS` gains no key. No
+     new source kind, and no new row in `src/input_shapes.py`, because the document reaches the run through the door
+     the state read already uses, and `ARCHITECTURE.md` §3.3 names that document as the source the provenance record
+     reads, unchanged.
+   - **Block and id state the same fact through `src/resource_mapping.py` `VALUE_VARIABLES`.** The table already
+     states the row for `ngfw_device` as a variable, so the block prints the reference and the id states the value
+     the run read, through the same row; the pair is recorded at the print site through `site_data.record_pair`, the
+     one statement of one name naming one source. `decode_id` declares no field for the serial, because the serial
+     rides inside the location object the id already declares. The comparison reads the two through
+     `sanity_checks.location_agrees`, the one comparison the location rule already uses, so it gained no branch of
+     its own and no second shape rule or name list appears.
+   - **A run that reads no state document declares no serial.** It reads no entry, so it holds no value, the
+     declaration set holds no name for it, and the ids for entries that need one hold no serial: the block prints the
+     reference for the fact the tool cannot read from an export, and the report names that fact for the operator
+     (`CODEBASE_ASSEMBLY.md` §9 rule 8). A run with no state source writes the bytes it writes today.
+   - **A bound unit with an entry that needs a serial and has none is a report-only finding.** The fact names an
+     operator action, so by `ARCHITECTURE.md` §4.6 rule 1 it is WARN and the exit code stays with the rules that read
+     the files. One line per entry, in its own section, printed only when the run read a state document and marked a
+     unit, so a run that read no state document, or declared no pair, writes the report bytes it writes today. No
+     sixth console kind, so the console keeps the five kinds §3.2 states and the console-shape pin is unchanged. The
+     lines are grouped by the F3.9 rule, the entry is named by `state_coverage.ownership_key`, and the bound answer
+     and the unit are read through `unit_manifest.mode_of` and `unit_manifest.marked_units`, so no second identity key
+     and no second unit rule appears.
+
+   The rule owner is `src/state_coverage.py` rule 7, which states the fact, the reading rule for which entry needs
+   it, the finding set, and the line shape, and states no reader, no path rule, no row shape, no unit rule, no
+   severity rule, no value of the pair and no name list of its own. `entry_needs_serial` answers whether an entry
+   needs the fact from the location the document holds for it, read through `LOCATION_SCHEMA`, so the answer is the
+   sub-block the entry sits in and not the row's capability: a `shared` entry names no device, and a sub-block the
+   row declares for another fact declares no device.
+
+   Pinned by `tests/test_state_coverage.py`, including `::test_the_serial_is_read_through_the_entry_shape_and_the_one_name`,
+   `::test_the_block_and_the_id_state_the_same_fact_through_the_shape_table`,
+   `::test_a_run_that_reads_no_state_document_declares_no_serial_and_writes_the_bytes_it_writes_today`,
+   `::test_a_bound_unit_with_an_entry_that_needs_a_serial_and_has_none_reports_one_line`,
+   `::test_the_serial_finding_does_not_move_the_exit_code_and_prints_no_console_line`,
+   `::test_the_serial_fact_adds_no_source_kind_and_no_input_shape_row`, and
+   `::test_the_serial_fact_names_no_second_identity_key_and_no_new_fact_key`. The report half is pinned by
+   `tests/test_reports.py::test_the_serial_section_prints_only_when_a_run_read_a_state_document_and_marked_a_unit`
+   and `::test_the_serial_section_is_byte_identical_between_runs`, and the declaration half by
+   `tests/test_variables.py::test_the_declaration_set_holds_the_serial_name_only_for_a_run_that_read_a_value_for_it`.
+   The order pin `tests/test_reports.py::test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders`
+   reads the new heading through its owner.
+
+   What the decision did not settle: the serial a live target states, which no committed response holds. That half
+   stays in `backlog.md`, so no code path in this piece reads a network, no pin calls one, and a run with no network
+   passes CI.
 
 7. **The rule types need a shape decision before an entry can be bound.** Either the emitter writes one object
    per rule, which moves the iterated block rule, the order rule, and the goldens, so it cannot be a
@@ -286,7 +334,8 @@ run writes the report bytes it writes today. The plan half is unchanged here, an
 ## 4. Facts only a live target states
 
 Recorded in `backlog.md`, in the codebase-assembly and provider-fact sections, so this document names no
-live fact: the device serial for a bound unit, the rulebase value, the position a live rulebase holds, the id
+live fact: the device serial a live target states for a bound unit, which is the half decision 6 left open after
+its offline half landed on 2026-11-26, the rulebase value, the position a live rulebase holds, the id
 shape for the types that carry the entry name under another field, whether `panorama_device` is needed in an
 id, the built-in name table, and the Terraform behaviour for an import block whose resource is already in
 state.

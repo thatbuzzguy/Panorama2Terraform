@@ -6215,6 +6215,7 @@ class TerraformGenerator:
         ownership_findings=None,
         cycle_findings=None,
         unit_rows=None,
+        state_source=None,
     ) -> str:
         """Generate CONVERSION_REPORT.txt for the entries the parse read (F4.3).
 
@@ -6228,7 +6229,8 @@ class TerraformGenerator:
         result. Each prints in its own section, after the property section, only when it has a finding,
         and each is grouped by the same scope rule as the other sections. Section order is fixed: header,
         summary, gaps, property findings, shadows, repeated names, reference cycles, state ownership,
-        drift, then the unit section (`docs/MULTI_RUN_CODEBASE.md` §7), then the marked-unit section
+        drift, the serial for a bound unit, then the unit section (`docs/MULTI_RUN_CODEBASE.md` §7), then the
+        marked-unit section
         (`docs/IMPORT_BINDING.md` §3), then the entry lines.
 
         `unit_rows` is the two row sets the unit section names: the rows the run built, and the merged rows a
@@ -6238,6 +6240,10 @@ class TerraformGenerator:
         bytes it writes today. The marked-unit section names the units this run marked from the same first set,
         through `unit_manifest.marked_units`, and prints one entry line per entry the property scan reads, so this
         writer states no unit rule, no row field, no value of the pair and no fact name of its own.
+
+        `state_source` is the state document the run read, so the section that names the entries that need a serial
+        reads them through `state_coverage`, the one state reader: a run that read no state document answers nothing
+        for it, so the section prints nothing and the report bytes are the bytes the report rule already writes.
 
         Returns '' when the input has no report rows, and writes no file in that
         case (F4.3 AC-9): a run that read no entry has nothing to report.
@@ -6306,6 +6312,11 @@ class TerraformGenerator:
                 for row in group:
                     lines.append(reference_edges.cycle_line(row))
 
+        # The units this run marked, read through the row owner once so the state section that names the bound
+        # units and the marked section below read the same set through the same rule. `unit_manifest.marked_units`
+        # answers an empty set for a run that declared no pair, so both sections print nothing for it.
+        marked = unit_manifest.marked_units(unit_rows[0]) if unit_rows else []
+
         # F5.6: the state scan. Ownership and drift are operator actions, not broken output, so
         # they do not change the exit code (the F4.1 gate does). Each section prints only when it
         # has a finding, and the console prints no state line.
@@ -6324,6 +6335,21 @@ class TerraformGenerator:
                     lines.append(self._report_section_header(path))
                     for row in group:
                         lines.append(state_coverage.drift_line(row))
+
+        # Decision 6 of `docs/IMPORT_BINDING.md` §2 (taken 2026-11-26): the serial for a bound unit. The entries are
+        # read through `state_coverage`, the one state reader, and the marked units through `unit_manifest`, so the
+        # section prints only when the run read a state document and marked a unit: a run that reads no state
+        # document, or declares no pair, writes the report bytes it writes today. Report content only, so the
+        # console keeps the five kinds §3.2 states, the exit code stays with the rules that read the files, and the
+        # grouping is the F3.9 rule the other sections use. This writer states no fact rule, no unit rule, no field
+        # and no value of the pair.
+        serial = state_coverage.serial_findings(state_source, marked)
+        if serial:
+            lines.extend(["", f"--- {state_coverage.SERIAL_HEADING} ---", state_coverage.SERIAL_RULE])
+            for path, group in self._group_by_scope(serial):
+                lines.append(self._report_section_header(path))
+                for row in group:
+                    lines.append(state_coverage.serial_line(row))
 
         # Epic 11 (`docs/MULTI_RUN_CODEBASE.md` §7): the two unit sets, both read through `unit_manifest.units`,
         # the one unit rule, so this writer names the sets and states no unit rule of its own. The section prints
@@ -6346,7 +6372,6 @@ class TerraformGenerator:
         # property scan's own row shape, so this writer states no unit rule, no row field, no value of the pair and no
         # fact name of its own. Report content only, because the fact compares two sets (`docs/ARCHITECTURE.md`
         # §3.2), and the grouping is the F3.9 rule the other sections use, so no second grouping rule appears.
-        marked = unit_manifest.marked_units(unit_rows[0]) if unit_rows else []
         if marked:
             lines.extend(["", f"--- {entry_coverage.MARKED_HEADING} ---", entry_coverage.MARKED_RULE])
             by_unit: dict = {}
@@ -7665,6 +7690,7 @@ def generate_run(
         # back. The sets are read through `unit_manifest.units` in the report rule owner, so this step hands over
         # the rows and states no unit rule of its own.
         (run_rows[unit_manifest], reference[unit_manifest]),
+        state_source,
     )
 
     # F5.3: the provenance record, in the order the run read the sources. Written outside the report bodies,

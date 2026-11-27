@@ -27,6 +27,13 @@ run declares no credential and writes no credential value. The host is the fact 
 and the provider block prints it through the table. Pins, one per part of the rule: the declaration set holds
 no name a table row states for a credential, the provider block prints the names the table states, and no
 printed argument is one the pinned schema marks `sensitive`.
+
+Decision 6 of `docs/IMPORT_BINDING.md` §2 (taken 2026-11-26) is the case where a table row does get a value:
+the serial field `ngfw_device` already has a `VARIABLE` row, so the print site records the pair for the value a
+state document states for an entry, and the declaration set holds the §5 name of that value only for a run that
+read a value for it. A run that read no state document read no entry, so it declares no serial name and writes
+the bytes it writes today, and an entry that needs the field and names no value prints no `.tfvars` line,
+because the writer prints the value behind a name.
 """
 
 import ast
@@ -44,7 +51,20 @@ import resource_mapping
 import sanity_checks
 import site_data
 import source_fetch
-from conftest import FIXTURES_DIR, SAMPLE_CONFIG, SRC_DIR, file_text, parts, run_script, tf_files
+import state_coverage
+from conftest import (
+    FIXTURES_DIR,
+    SAMPLE_CONFIG,
+    SERIAL_VALUE,
+    SRC_DIR,
+    file_text,
+    parts,
+    record_rows,
+    run_pipeline,
+    run_script,
+    serial_run,
+    tf_files,
+)
 
 CASES = {
     "sample": SAMPLE_CONFIG,
@@ -392,3 +412,55 @@ def test_the_record_refuses_two_entries_that_name_one_variable(tmp_path):
     site_data.record_pair(merged, "ap_1", "AP-1")
     site_data.record_pair(merged, "ap_1", "AP-1")
     assert merged == {"ap_1": "AP-1"}, merged
+
+
+def test_the_declaration_set_holds_the_serial_name_only_for_a_run_that_read_a_value_for_it(converter_module, tmp_path):
+    """Decision 6 of `docs/IMPORT_BINDING.md` §2 (taken 2026-11-26), answer 3: the `VARIABLE` row names a variable for
+    a value the run read, so a fact the run read no value for names no variable, and the ids for the entries that need
+    one state no serial.
+
+    Measured 2026-11-27. On `multi_device_templates.xml` the run read a value for the fact at the print site for two
+    units, so the set holds the name the naming rule derives from each value, and the gate answers nothing for either
+    file because the block consumes each name. On the content `tests/conftest.py::serial_content` writes, the state
+    document names no value for the entry that needs the fact, so no name is recorded for it, and the run that reads no
+    state document records none either: the state document reaches the run as a reference source, so the value the
+    committed state document holds for `web_range_33333333` names no variable, because the reference read reaches the
+    ownership half only and prints nothing.
+
+    The pin states no name list: it reads the row through `VALUE_VARIABLES`, the name through `naming`, and the pair
+    through `site_data.parse_rows`, the one statement of one name naming one source.
+    """
+    serial_row = resource_mapping.VALUE_VARIABLES[state_coverage.STATE_SERIAL_KEY]
+    assert serial_row == resource_mapping.VARIABLE, serial_row
+    serial_name = naming.variable_name(SERIAL_VALUE)
+
+    # A run that read a value for the fact names the variable the naming rule derives from it, and the block consumes
+    # the name it named.
+    read_run = tmp_path / "read_run"
+    assert run_pipeline(converter_module, "multi_device_templates.xml", read_run) is not None
+    rows = record_rows(read_run)[site_data]
+    assert rows, "the pins read a run that recorded a value for the fact"
+    named = {name for row in rows for name in row["variables"]}
+    assert named, named
+    for row in rows:
+        for name, value in row["variables"].items():
+            assert name == naming.variable_name(value), (row, name, value)
+        files = tf_files(read_run)
+        for name in row["variables"]:
+            unit = {key: text for key, text in files.items() if Path(key).parent.name == row["directory"]}
+            assert any(f"var.{name}" in text for text in unit.values()), (row["directory"], name)
+        assert sanity_checks.check_variables(files) == [], sanity_checks.check_variables(files)
+
+    # A run that read no value for the fact names nothing for it: the pair content holds no value, and the committed
+    # state document's value reaches the ownership half only, so the print site records no pair for it.
+    _source, plain, state_only, declared, _pairs, _document = serial_run(converter_module, tmp_path)
+    for out in (plain, state_only, declared):
+        names = {name for row in record_rows(out)[site_data] for name in row["variables"]}
+        assert serial_name not in names, (out, names)
+    # The writer prints the value behind a name, so a name with no value behind it prints no line: the pair the
+    # declared run wrote names the device group fact, not the serial, and no unit's `.tfvars` holds the serial.
+    for out in (plain, state_only, declared):
+        for row in record_rows(out)[site_data]:
+            assert serial_name not in row["variables"], row
+        for path in sorted(Path(out).rglob(site_data.TFVARS_FILE)):
+            assert serial_name not in path.read_text(encoding="utf-8"), path

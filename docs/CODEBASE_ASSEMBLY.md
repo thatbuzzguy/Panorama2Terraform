@@ -615,6 +615,14 @@ files for every run that has content.
    print site, before `generate_variables()` runs, so the declaration set is what the run consumed. Neither row
    is a credential: the credential is the key §11 states, and the run holds no value for it and declares no
    variable for it.
+   The one source that can state a value for the serial field is a state document read as a reference source,
+   which decision 6 of [`IMPORT_BINDING.md`](IMPORT_BINDING.md) §2 took on 2026-11-26. The table already states
+   the `ngfw_device` row as a variable, so the row gains nothing: the print site records the pair for the value
+   the run read, so the declaration set holds the name the §5 rule derives from that value only for a run that
+   read a value for it, and a run that read no state document declares no serial name and writes the bytes it
+   writes today. `tests/test_variables.py::test_the_declaration_set_holds_the_serial_name_only_for_a_run_that_read_a_value_for_it`
+   is that pin. An entry that needs the field and names no value is one report line in the state scan's own
+   section, so no site row and no `.tfvars` line is written for it either.
 9. **The generated `README.md` names the site files.** The F5.5 label precedent (§5) says a report may name what
    a reader cannot see from a `.tf` file alone, so the README names `imports.tf`, `SITE_DATA.json` and
    `site.auto.tfvars`, and names `target` as the fact the tool names as a variable and cannot name as a value. It
@@ -633,7 +641,10 @@ Pinned by `tests/test_site_data.py`, including `::test_the_corpus_rows_are_pinne
 `::test_the_provider_block_prints_target_only_for_a_unit_that_names_a_device`, and
 `::test_the_gate_reads_the_record_and_its_printed_form_through_site_data`. The report bytes of the corpus are
 otherwise unchanged, and `tests/test_variables.py` pins the provider block against the table and the measured
-provider schema.
+provider schema, including
+`tests/test_variables.py::test_the_declaration_set_holds_the_serial_name_only_for_a_run_that_read_a_value_for_it`,
+which reads the pair content `tests/conftest.py::serial_content` writes because the committed corpus holds no
+state entry that needs the serial inside a unit a declaration can mark.
 
 ## 10. The commit action per unit (F6.7, landed)
 

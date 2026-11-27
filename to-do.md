@@ -34,9 +34,9 @@ group 10, `tests/test_container_coverage.py` group 5, `tests/test_data_file_gate
 
 ### Phase 14B, the facts an id needs
 
-- **14B.1** — the device fact for a bound unit: the site value an operator declares, read through `site_data.py`
-  so the block and the id print the same fact through `VALUE_VARIABLES`. Needs decision 6; the half that reads a
-  live target stays in `backlog.md`.
+- **14B.1** — the device serial fact for a bound unit, complete on main, 2026-11-27, and committed, so this piece's
+  record lives in the git history. Decision 6 was taken 2026-11-26, so the piece read the state document as the
+  source, and the live-target half stays in `backlog.md`.
 - **14B.2** — the rule types: the shape decision in §2 decision 7, then the instance half of
   `import_blocks.IMPORT_ROW_FIELDS` if the shape changes. Blocked on the F3.5 rulebase value and on a source
   that states the position a live rulebase holds, so it stays out of the pieces until both land.

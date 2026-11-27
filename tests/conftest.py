@@ -765,3 +765,115 @@ def run_pipeline(module, fixture_name, output_dir, extra_args: tuple = ()):
         module.PanoramaParser.__init__ = original_init
         sys.argv = saved_argv
     return captured.get("parser")
+
+
+# --- The device-serial content the pins read (Epic 14, decision 6, piece 14B.1) ---
+
+# The pair the serial pins read: one entry the export places inside a virtual system, and the state document's
+# entry for the same object with no serial for it. Two test modules read the same content, so the builder lives
+# here and no test module states it a second time. The names are the facts the run's own rows read, read through
+# `unit_manifest`, and the serial is the fact `state_coverage` names, so the pins read both through their owners
+# and state no name list of their own. The declaration a pin runs with is read from the first run's rows through
+# `declaration_pairs`, so this builder holds no declaration, and no pin states the pair shape.
+# The committed state document and the workspace its scope reads, read by three test modules.
+STATE_FIXTURE = "state_workspace.json"
+WORKSPACE = "production"
+
+SERIAL_ENTRY_NAME = "Web-Range"
+# The value the committed state document names for the fact on `web_range_33333333`, read by two test modules.
+SERIAL_VALUE = "firewall-2"
+SERIAL_GROUP = "Production-DG"
+SERIAL_VSYS = "Vsys1"
+
+
+def serial_content(out_dir) -> tuple:
+    """The source the run parses, and the state document that holds the same entry with no serial for it.
+
+    Writes both in `out_dir` and returns `(source, document)`. The state entry sits in the scope the run's own
+    rows read for the entry, so `state_coverage.ownership_key` joins the two, and the document names no value for
+    the field that sub-block declares, which is the content the pins measure.
+    """
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    source = out / "serial_entry.xml"
+    source.write_text(
+        '<?xml version="1.0"?>\n<config version="10.0.0">\n  <devices>\n'
+        f'    <entry name="{SERIAL_GROUP}">\n      <device-group>\n        <entry name="{SERIAL_GROUP}">\n'
+        f'          <vsys>\n            <entry name="{SERIAL_VSYS}">\n              <address>\n'
+        f'                <entry name="{SERIAL_ENTRY_NAME}">\n'
+        "                  <ip-netmask>10.1.1.10/32</ip-netmask>\n"
+        "                </entry>\n              </address>\n            </entry>\n          </vsys>\n"
+        "        </entry>\n      </device-group>\n    </entry>\n  </devices>\n</config>\n",
+        encoding="utf-8",
+    )
+    document = out / "serial_state.json"
+    document.write_text(
+        json.dumps(
+            {
+                "resources": [
+                    {
+                        "module": "root",
+                        "type": "panos_address",
+                        "name": "serial_entry",
+                        "provider": 'provider["panos"]',
+                        "instances": [
+                            {
+                                "attributes": {
+                                    "name": SERIAL_ENTRY_NAME,
+                                    "location": {
+                                        "device_group": {"name": SERIAL_GROUP},
+                                        "vsys": {"name": SERIAL_VSYS},
+                                    },
+                                }
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return source, document
+
+
+def serial_run(converter_module, out_dir, workspace="production") -> tuple:
+    """The three runs on the same pair content: the run that reads no state document, the run that reads one and
+    declares no pair, and the run that reads one and declares the pair the first run's rows show. Three test modules
+    run the same three runs, so the runs are stated once here.
+
+    Returns `(source, plain_out, state_only_out, declared_out, pairs, document)`. The first two runs are the runs that
+    write the bytes they write today, so a pin measures each against the third. The declaration is read through
+    `declaration_pairs`, so this states no pair shape, and every run answers 0, because the serial fact names an
+    operator action, which the gate rule does not decide.
+    """
+    source, document = serial_content(out_dir)
+    plain = Path(out_dir) / "plain"
+    assert run_main(converter_module, [str(source), "--output-dir", str(plain)]) == 0
+    pairs = declaration_pairs(record_rows(plain)[unit_manifest], MODE_VALUES[0])
+    assert pairs, "the pins read a run whose rows show a unit a pair can name"
+    state_only = Path(out_dir) / "state_only"
+    assert (
+        run_main(
+            converter_module,
+            [str(source), "--output-dir", str(state_only), "--state", str(document), "--workspace", workspace],
+        )
+        == 0
+    )
+    declared = Path(out_dir) / "declared"
+    assert (
+        run_main(
+            converter_module,
+            [
+                str(source),
+                "--output-dir",
+                str(declared),
+                "--state",
+                str(document),
+                "--workspace",
+                workspace,
+                *declaration_args(pairs),
+            ],
+        )
+        == 0
+    )
+    return source, plain, state_only, declared, pairs, document

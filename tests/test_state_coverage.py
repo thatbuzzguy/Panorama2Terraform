@@ -1,6 +1,6 @@
-"""F5.6 state coverage: the ownership fact and the drift fact.
+"""F5.6 state coverage: the ownership fact, the drift fact, and the device serial fact for a bound unit.
 
-Eight groups, one per acceptance rule:
+Nine groups, one per acceptance rule:
 
 1. The state entry shape the scan reads: the matrix row is the row keyed by the resource type
    through the same table, the properties are read with the F4.3 rule, and the position is the
@@ -21,11 +21,19 @@ Eight groups, one per acceptance rule:
    table has no row.
 8. The existing codebase records as a reference source: read as data through the readers the shape owners
    state, and the half the read reaches (`docs/MULTI_RUN_CODEBASE.md` §4 rule 1).
+9. The device serial fact for a bound unit (decision 6 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26): the
+   value the state document holds for the entry through the location it holds, the one name the module states,
+   the block and the id as one fact through the shape table, no serial for a run that reads no state document,
+   the report-only finding for a bound unit, the exit code the F4.1 gate still decides, and the owner shape that
+   states no reader, no path rule, no row shape, no unit rule, no severity rule, no value of the pair and no name
+   list of its own.
 
 Every test uses a committed fixture, so no test opens a connection. The run side is
 `tests/fixtures/address_objects.xml`; the state side is `tests/fixtures/state_workspace.json`. The pins
 in group 7 read the live provider schema through `tests/conftest.py`, which owns the skip rule, and the pins
-in group 7 and group 8 read the committed pair through `tests/conftest.py`.
+in group 7 and group 8 read the committed pair through `tests/conftest.py`. The committed corpus holds no state
+entry that needs a serial inside a unit a declaration can mark, so the pins in group 9 read the content
+`tests/conftest.py::serial_content` writes, and no committed byte moves.
 """
 
 import ast
@@ -41,31 +49,42 @@ import codebase_state
 import container_coverage
 import entry_coverage
 import import_blocks
+import input_shapes
+import naming
 import ownership
 import provenance
 import resource_mapping
 import sanity_checks
+import site_data
 import state_coverage
 import state_input
+import unit_manifest
 from conftest import (
     CODEBASE_FIXTURE,
     FIXTURES_DIR,
     JOIN_RECORDS,
+    MODE_VALUES,
     RUN_FIXTURE,
+    SERIAL_ENTRY_NAME,
+    SERIAL_GROUP,
+    SERIAL_VSYS,
     SRC_DIR,
+    STATE_FIXTURE,
+    WORKSPACE,
+    declaration_args,
     partial_run,
     record_rows,
     run_main,
     run_pipeline,
+    serial_run,
+    tf_bytes,
     written_bytes,
 )
 from xml_input import parse_xml
 
-STATE_FIXTURE = "state_workspace.json"
 SERVICE_FIXTURE = "service_groups.xml"
 REGION_FIXTURE = "regions.xml"
 GROUP_FIXTURE = "address_groups.xml"
-WORKSPACE = "production"
 
 # The entries both sides hold, and the lines the run side reads them at.
 OWNED_NAME = "Web-Server-1"
@@ -782,3 +801,242 @@ def test_the_reference_read_reaches_the_ownership_half_and_no_property_value(tmp
         "the record row shape holds no property field, so the reference read supplies no value to compare"
     )
     assert MAPPED_KEY not in row, row
+
+
+# --- 9. The device serial fact for a bound unit (decision 6, `docs/IMPORT_BINDING.md` §2, taken 2026-11-26) ---
+
+# The committed state entry that names the serial, and the value it names. The pin names the variable through the
+# naming rule, reads the sub-block through `LOCATION_SCHEMA` and the fact through `STATE_SCOPE_KEYS`, and states no
+# name list of its own. The content a finding needs is written through `tests/conftest.py`, because the committed
+# corpus holds no state entry that needs a serial inside a unit a declaration can mark, so no committed byte moves.
+SERIAL_ADDRESS = "panos_address.web_range_33333333"
+SERIAL_VALUE = "firewall-2"
+SERIAL_VARIABLE = naming.variable_name(SERIAL_VALUE)
+SHARED_ADDRESS = "panos_address.web_range_a1b2c3d4"
+
+
+def _state_entry(state: state_input.StateSource, address: str) -> state_input.StateEntry:
+    """One committed state entry, read through the producer."""
+    return next(entry for entry in state.entries if entry.address == address)
+
+
+def test_the_serial_is_read_through_the_entry_shape_and_the_one_name(state):
+    """Decision 6 answer 1: the serial for a state entry is the value the document holds for it, read through the
+    entry shape and rule 2's location walk, and the module names it once.
+
+    Measured 2026-11-27 on the committed state document: `SERIAL_ADDRESS` is the entry that names the field, so the
+    pin measures the fact as content on committed material. The sub-block is read through `LOCATION_SCHEMA` and the
+    fact through `STATE_SCOPE_KEYS`, so the pin states no name list. An entry the document places in `shared` sits
+    in no sub-block that declares the field, so it needs no serial, and the property scan reads no property for the
+    field, because the location is identity and not content (F4.3 rule 3).
+    """
+    entry = _state_entry(state, SERIAL_ADDRESS)
+    row = resource_mapping.LOCATION_SCHEMA[entry.resource_type]
+    blocks = [block for block, fields in row.items() if state_coverage.STATE_SERIAL_KEY in fields]
+    assert blocks, "the pin reads a row that declares no sub-block for the field"
+    # The sub-block fills its own fact through `STATE_SCOPE_KEYS`; the field fills the fact the module names once,
+    # so the table holds no row for the serial and the pin states no name of its own.
+    assert state_coverage.STATE_SCOPE_KEYS[blocks[0]] == blocks[0]
+    assert "serial" not in state_coverage.STATE_SCOPE_KEYS, state_coverage.STATE_SCOPE_KEYS
+    assert state_coverage.entry_needs_serial(entry)
+    assert state_coverage.serial_of(state_coverage.state_facts(entry)) == SERIAL_VALUE
+    assert state_coverage.STATE_SERIAL_KEY not in state_coverage.state_properties(entry)
+    assert not state_coverage.entry_needs_serial(_state_entry(state, SHARED_ADDRESS))
+    assert "serial" not in state_coverage.STATE_IDENTITY_KEYS, state_coverage.STATE_IDENTITY_KEYS
+    assert "serial" not in resource_mapping.VALUE_VARIABLES, "the piece added no row to the shape table"
+    assert resource_mapping.VALUE_VARIABLES[state_coverage.STATE_SERIAL_KEY] == resource_mapping.VARIABLE
+
+
+def test_the_block_and_the_id_state_the_same_fact_through_the_shape_table(state, converter_module, tmp_path):
+    """Decision 6 answer 2: the block prints the shape the table states for the name, the id states the value the run
+    read, and the gate reads the two as one fact, so the pair is one fact read through `VALUE_VARIABLES`,
+    `site_data.record_pair`, `decode_id` and `sanity_checks.check_import_blocks`.
+
+    Measured 2026-11-27 on the committed state entry that names the serial, printed through the print site the table
+    governs: the block prints the §5 name of the value, the id holds the value inside the location the entry sits in,
+    the pair is recorded through the owner, and the gate answers nothing for the pair. The same fact printed as a
+    literal is a finding through the same gate rule, so `location_agrees` gained no branch of its own.
+    """
+    entry = _state_entry(state, SERIAL_ADDRESS)
+    facts = state_coverage.state_facts(entry)
+    local = SERIAL_ADDRESS.split(".", 1)[1]
+    generator = converter_module.TerraformGenerator(str(tmp_path), {})
+    obj = dict(facts)
+    obj["name"] = entry.entry_name
+    data = generator.location_data(entry.resource_type, obj)
+    block = generator.location_block(entry.resource_type, obj, local)
+    shape = import_blocks.row("unit_a_11111111", entry.resource_type, local, entry.entry_name, data)
+    text = f'resource "{entry.resource_type}" "{local}" {{\n{block}\n  name = "{entry.entry_name}"\n}}\n'
+    assert naming.variable_text(SERIAL_VARIABLE) in block, block
+    assert generator.printed_value(state_coverage.STATE_SERIAL_KEY, SERIAL_VALUE, unit_manifest.facts_of(obj)) == (
+        naming.variable_text(SERIAL_VARIABLE)
+    )
+    assert generator.value_variables()[unit_manifest.facts_of(obj)] == {SERIAL_VARIABLE: SERIAL_VALUE}
+    decoded = import_blocks.decode_id(shape["import_id"])
+    assert decoded["name"] == entry.entry_name
+    assert decoded["location"] == data, "the id encodes the same location the block states"
+    row = resource_mapping.LOCATION_SCHEMA[entry.resource_type]
+    sub = next(block for block, fields in row.items() if state_coverage.STATE_SERIAL_KEY in fields)
+    assert decoded["location"][sub][state_coverage.STATE_SERIAL_KEY] == SERIAL_VALUE
+    assert sanity_checks.check_import_blocks({"a.tf": text + import_blocks.render([shape])}) == []
+    literal = text.replace(naming.variable_text(SERIAL_VARIABLE), f'"{SERIAL_VALUE}"') + import_blocks.render([shape])
+    assert sanity_checks.check_import_blocks({"a.tf": literal}), "a block that prints the literal is a finding"
+
+
+def test_a_run_that_reads_no_state_document_declares_no_serial_and_writes_the_bytes_it_writes_today(
+    converter_module, tmp_path
+):
+    """Decision 6 answer 3: a run that reads no state document reads no entry, so it holds no value for the serial,
+    the declaration set holds no name for it, and the ids for entries that need one hold no serial.
+
+    Measured 2026-11-27 on `RUN_FIXTURE`: the run with no state source and the same run with the committed state
+    document write the same `.tf` bytes, because the state document is read as a reference source and prints nothing.
+    The declared run on the pair content writes ids that hold no value for the fact, and its declaration set holds no
+    name named by the value the state document holds for the entry it read.
+    """
+    plain = tmp_path / "plain"
+    with_state = tmp_path / "with_state"
+    assert run_main(converter_module, [str(FIXTURES_DIR / RUN_FIXTURE), "--output-dir", str(plain)]) == 0
+    state_argv = [str(FIXTURES_DIR / RUN_FIXTURE), "--output-dir", str(with_state), *_state_args()]
+    code = run_main(converter_module, state_argv)
+    assert code == 0, code
+    assert tf_bytes(plain) == tf_bytes(with_state), (sorted(tf_bytes(with_state)), sorted(tf_bytes(plain)))
+    assert tf_bytes(plain), "the pins read a run that wrote output"
+    names = {name for row in record_rows(plain)[site_data] for name in row["variables"]}
+    assert SERIAL_VARIABLE not in names, names
+    _source, _pair_plain, _pair_state_only, pair_declared, _pairs, _document = serial_run(
+        converter_module, tmp_path / "pair"
+    )
+    files = {
+        str(path.relative_to(pair_declared)): path.read_text(encoding="utf-8")
+        for path in sorted(Path(pair_declared).rglob("*.tf"))
+    }
+    written = sanity_checks.blocks(files, ("import",))
+    assert written, "the declared run wrote an import block for the entry that needs the fact"
+    for block in written:
+        decoded = import_blocks.decode_id(import_blocks.block_value(block, "id"))
+        for fields in decoded["location"].values():
+            assert fields.get(state_coverage.STATE_SERIAL_KEY, "") != SERIAL_VALUE, (block.file, decoded)
+    declared_names = {name for row in record_rows(pair_declared)[site_data] for name in row["variables"]}
+    assert SERIAL_VARIABLE not in declared_names, declared_names
+
+
+def test_a_bound_unit_with_an_entry_that_needs_a_serial_and_has_none_reports_one_line(converter_module, tmp_path):
+    """Rule 7, decision 6 answer 4: one line per entry that needs a serial and has none, inside its own section, with
+    the entry named through `ownership_key`, the bound answer read through `unit_manifest.mode_of`, and the group
+    read through the F3.9 rule.
+
+    Measured 2026-11-27 on the content `tests/conftest.py::serial_content` writes, because the committed corpus holds
+    no state entry that needs a serial inside a unit a declaration can mark: the export places the entry inside
+    `Vsys1` in `Production-DG`, the state document holds the same entry with no value for the field, and the
+    declaration names the unit the run's own rows show. The section holds one line, and the group header names the
+    device group the F3.9 rule reads for the entry.
+    """
+    _source, _plain, _state_only, declared, _pairs, document = serial_run(converter_module, tmp_path)
+    marked = unit_manifest.marked_units(record_rows(declared)[unit_manifest])
+    assert marked, "the pins read a run that marked a unit"
+    state = state_input.read_state(document, workspace=WORKSPACE)
+    findings = state_coverage.serial_findings(state, marked)
+    assert len(findings) == 1, findings
+    finding = findings[0]
+    facts = {key: finding[key] for key in container_coverage.SCOPE_FACT_KEYS}
+    key = state_coverage.ownership_key(finding["resource"], finding["name"], facts)
+    assert key[0] == finding["resource"] and key[1] == SERIAL_ENTRY_NAME, key
+    assert key[2:] == tuple(facts.values()), "the finding names the entry through the one key rule"
+    assert key[2] == SERIAL_GROUP and key[3] == SERIAL_VSYS, key
+    assert state_coverage.serial_of(facts) == "", "the document names no value for the field, which is the finding"
+    entry = next(item for item in state.entries if item.address == finding["state_address"])
+    assert state_coverage.entry_needs_serial(entry), entry
+    assert unit_manifest.unit_name(unit_manifest.facts_of(finding)) == SERIAL_VSYS, finding
+    assert unit_manifest.mode_of(finding) == MODE_VALUES[0], finding
+    report = _report(declared)
+    section = _section(report, state_coverage.SERIAL_HEADING)
+    body = [line for line in section.splitlines() if "state source" in line]
+    assert body == [state_coverage.serial_line(finding)], (section, body)
+    generator = converter_module.TerraformGenerator(str(tmp_path / "gen"), {})
+    header = generator._report_section_header(generator._report_scope_path(finding))
+    assert header in section, section
+    assert header == "DEVICE GROUP: Production-DG", header
+
+
+def test_the_serial_finding_does_not_move_the_exit_code_and_prints_no_console_line(converter_module, tmp_path):
+    """Rule 7, decision 6 answer 4, the half the gate decides: the fact names an operator action, so the F4.1 gate
+    still decides the exit code, the gate rule reads nothing for it, and the console prints no line for it. The
+    console shape has one owner, `container_coverage.console_line`, and the piece changed no kind list, so
+    `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place` is unchanged.
+    """
+    source, _plain, _state_only, declared, pairs, document = serial_run(converter_module, tmp_path)
+    saved_argv = list(sys.argv)
+    sys.argv = [
+        "panorama_to_terraform.py",
+        str(source),
+        "--output-dir",
+        str(tmp_path / "console"),
+        "--state",
+        str(document),
+        "--workspace",
+        WORKSPACE,
+        *declaration_args(pairs),
+    ]
+    try:
+        with contextlib.redirect_stdout(io.StringIO()) as console:
+            code = converter_module.main()
+    finally:
+        sys.argv = saved_argv
+    assert code == 0, "the fact does not change the exit code"
+    value = console.getvalue()
+    # The console names the serial inside the file names it prints, so the pin reads the fact wording the line
+    # shape would use, and the state position the shape has no room for: neither appears on a console line.
+    assert "needs a serial" not in value, value
+    assert "state source" not in value, value
+    assert not hasattr(state_coverage, "console_line"), "the state scan owns no console wording"
+    assert not hasattr(state_coverage, "CONSOLE_KINDS"), "the kind list has one owner"
+    assert sanity_checks.run_checks(declared).fail_count == 0, sanity_checks.run_checks(declared)
+
+
+def test_the_serial_fact_adds_no_source_kind_and_no_input_shape_row():
+    """Decision 6 answer 1, the half the door states: the state document reaches the run through the door's one shape
+    row for it and through the kind `state_input` states, so the piece added no source kind and no `SHAPE_TABLE` row,
+    and the module states no reader of its own.
+
+    Measured 2026-11-27 on the table: one row names the JSON state document shape, and no row names the serial or the
+    field the serial reads by, so the fact reaches `state_coverage` through the door unchanged.
+    """
+    rows = [row for row in input_shapes.SHAPE_TABLE if "state document" in row["shape"]]
+    assert len(rows) == 1, rows
+    for row in input_shapes.SHAPE_TABLE:
+        assert state_coverage.STATE_SERIAL_KEY not in row["shape"], (row, "a shape row that names the serial")
+    assert state_input.STATE_KIND == "state", state_input.STATE_KIND
+    assert not hasattr(state_coverage, "STATE_KIND"), "the module states no source kind of its own"
+    assert not hasattr(state_coverage, "read_state"), "the module states no reader of its own"
+
+
+def test_the_serial_fact_names_no_second_identity_key_and_no_new_fact_key():
+    """Rule 7, the shape of the owner: the serial is read inside the location, which `STATE_IDENTITY_KEYS` already
+    keeps out of the property set, `unit_manifest.FACT_KEYS` gains no key, and the finding reads the unit and the
+    bound answer through `unit_manifest`, so `state_coverage.py` states no reader, no path rule, no row shape, no
+    unit rule, no severity rule, no value of the pair, and no name list of its own.
+
+    Measured 2026-11-27: `FACT_KEYS` is the set its owner states, read through that owner, and the module holds no
+    second statement of the finding rule, the mode values, or the kind list.
+    """
+    assert frozenset({"name", "location"}) == state_coverage.STATE_IDENTITY_KEYS
+    assert unit_manifest.FACT_KEYS == container_coverage.SCOPE_FACT_KEYS
+    assert "serial" not in unit_manifest.FACT_KEYS, unit_manifest.FACT_KEYS
+    assert state_coverage.STATE_SERIAL_FACT in unit_manifest.FACT_KEYS
+    source_text = (SRC_DIR / "state_coverage.py").read_text(encoding="utf-8")
+    for rule in (
+        "def units",
+        "def parse_rows",
+        "def mode_of",
+        "def marked_units",
+        "def unit_name",
+        "def read_state",
+        "def sanitize_name",
+        "def variable_name",
+    ):
+        assert rule not in source_text, f"state_coverage.py states a rule its owner defines ({rule})"
+    for other in (unit_manifest, resource_mapping, entry_coverage, sanity_checks, site_data, naming, state_input):
+        assert not hasattr(other, "SERIAL_RULE"), (other.__name__, "a second statement of the finding rule")
+    assert not hasattr(state_coverage, "MODE_VALUES"), "the value is read through the pair's owner"
+    assert state_coverage.STATE_SERIAL_KEY == "ngfw_device", "the field name is stated once in the owner"

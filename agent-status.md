@@ -1,106 +1,114 @@
 # Agent Status
 
-## Current position (main, Piece 14A.4, the report section for the units a run marked, 2026-11-26)
+## Current position (main, Piece 14B.1, the device serial fact for a bound unit, 2026-11-27)
 
-Piece 14A.4 is complete on main, 2026-11-26, and is not pushed, on top of Piece 14A.3, whose record lives in the git
-history. Decision 4 of `docs/IMPORT_BINDING.md` §2 is taken by the operator on 2026-11-26, and its four answers are
-recorded there: the name is `whole_block`, the owner is the property scan through `entry_coverage.py`, the severity is
-WARN, and the fact prints in the report only. The writing rules are in their owner document `docs/WRITING_RULES.md`,
-so this file keeps the status and the links and states no writing rule of its own. The baseline this piece started
-from was Piece 14A.3's measurement: 1,878 pins in 55 test modules.
+Piece 14B.1 is complete on main, 2026-11-27, and is not pushed, on top of Piece 14A.4, whose record lives in the git
+history. Decision 6 of `docs/IMPORT_BINDING.md` §2 is taken by the operator on 2026-11-26, and its four answers are
+recorded there: the source is the state document read as a reference source through `state_coverage.py`, the block and
+the id state the same fact through the row `VALUE_VARIABLES` already states, a run that reads no state document
+declares no serial, and a bound unit with an entry that needs a serial and names none is a report-only finding. The
+writing rules are in their owner document `docs/WRITING_RULES.md`, so this file keeps the status and the links and
+states no writing rule of its own. The baseline this piece started from was Piece 14A.4's measurement: 1,891 pins in
+55 test modules.
 
-- Placement, and the reason. The pair the fact compares is the properties a matrix row declares and the fields an
-  output read for the entry, which is the pair the scan already reads, so the fact name is data in its owner
-  (`entry_coverage.WHOLE_BLOCK_FACT`), the pair answer is `pair_answer`, and the scan scope is `block_rows`, which
-  carries `unused_properties` for every entry in it. `property_findings` is the difference subset of that scope, so the
-  scope rule is stated once and the pinned corpus finding set did not move. The answer inherits the blind side the scan
-  already states through `captured_fields`: an entry whose fields the parse stored empty is not a captured field, so
-  the pair answers on the set the parse kept and that entry answers the fact name. The severity is WARN by
-  `docs/ARCHITECTURE.md` §4.6 rule 1, so the fact names an operator action and the exit code stays with the rules that
-  read the files. The print shape is the report only, so the §3.2 console-kind list stays at five kinds and no sixth
-  kind appears; `tests/test_container_coverage.py::test_the_console_line_shape_is_stated_in_one_place` is unchanged.
-  The report gains one section, after the Epic 11 unit section and before the entry lines, that names the units the run
-  marked and one line per entry inside them that the scan reads. The marked units are read through
-  `unit_manifest.marked_units` and the value through `unit_manifest.mode_of`, so the report states no unit rule, no row
-  field and no value of the pair; the line shape is `entry_coverage.marked_unit_line`, stated once, and the entry line
-  is the shape `property_line` already states, so the report holds one line shape for both answers. The lines are
-  grouped by the F3.9 rule (`_report_scope_path`, `_group_by_scope`, `_report_section_header`), and the sort stays the
-  order the scan's own rule gives them (line, container, name). The section prints only when the run marked a unit, so
-  a run that declares no pair writes the report bytes it writes today. `tests/conftest.py::partial_run` gained an
-  optional `extra_args`, the same shape `run_pipeline` already takes, so a pin that reads the units a run marked can
-  declare the pairs the first run's rows name; `tests/test_reports.py::_unit_pair` passes it through.
-- The pins: 13 added, none moved, and the order pin extended. `tests/test_property_coverage.py` gained
-  `test_the_fact_name_is_data_read_through_the_owner`,
-  `test_the_scan_rows_carry_the_pair_and_the_findings_are_the_difference_subset`,
-  `test_the_pair_answer_names_one_fact_per_entry_through_the_owner`,
-  `test_the_pair_answer_inherits_the_blind_side_the_scan_states`,
-  `test_the_pair_answer_is_a_coverage_fact_that_cannot_move_the_exit_code`, and
-  `test_the_pair_answer_prints_in_the_report_only_and_moves_no_console_kind`. `tests/test_reports.py` gained
-  `test_the_marked_section_names_the_units_the_run_marked_through_the_record`,
-  `test_the_marked_section_prints_one_line_per_entry_in_the_scan_scope`,
-  `test_the_marked_section_prints_only_when_the_run_marked_a_unit`,
-  `test_the_marked_section_groups_by_the_f3_9_rule_and_names_no_directory`,
-  `test_the_marked_section_is_byte_identical_between_runs`, and
-  `test_the_report_prints_no_console_line_for_the_marked_section`, and
-  `test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders` reads the new heading.
-  `tests/test_unit_manifest.py` gained
-  `test_the_report_reads_the_marked_units_and_the_mode_through_the_row_owner`. The console-shape pin and the corpus
-  finding pins are unchanged, so no pin was moved.
-- Measurements, 2026-11-26. On `tests/fixtures/report_grouping.xml` through the script: the run that declares no pair
-  marks no unit, and the run that declares the 5 pairs its own rows name marks 10 of its 11 rows, and the row it does
-  not mark is `Shared`, because the pair builder reads a place through `container_coverage` and the shared set names no
-  place; the scan reads 17 rows inside that run and all 17 answer the fact name. On `tests/fixtures/pbf_rules.xml`:
-  2 pairs, 2 marked rows, 5 scan rows, 1 answering the fact name and 4 answering a difference, so
-  `CORPUS_FINDINGS` still reads the same 8 fixtures and 20 entries, the difference subset. On the pair
-  (`CODEBASE_FIXTURE`, `tests/fixtures/dependency_wiring.xml`): 9 pairs, 1 marked unit (`vsys1`), 21 scan rows, 11 of
-  them inside the marked unit and printed and 10 inside the run's unmarked unit and not printed, 10 whole and 1
-  difference. Two runs that declare the same pairs write byte-identical layouts. The declared report with the marked
-  section taken out reads byte for byte as the plain report, so every other section and the entry lines are the bytes
-  the report rule already writes. A plain run and a declared run on the same fixture print the same scan block lines
-  and the same exit code (`pbf_rules.xml` exits 0 both, `dependency_wiring.xml` exits 1 both), and the fact name
-  reaches no console line, so the console keeps the kinds §3.2 states. The order pin keeps two measurements: the cycle
-  position on `tests/fixtures/reference_cycle.xml`, and the marked position on the pair, because no committed fixture
-  pair prints a cycle section and the marked section in one report — only `reference_cycle.xml` trips a cycle, and the
-  units its rows name are named by no pair read from another fixture's rows. On that pair the headings print in this
-  order: gap section, property findings, unit section, marked section, then the entry lines.
-- Documents that moved in the same commit: `docs/IMPORT_BINDING.md` §1 fact 6, §2 decision 4 as taken and §3;
-  `docs/ARCHITECTURE.md` §3.2 (the fact prints in the report only, so no sixth console kind) and §4.5, whose section
-  order now names the run's unit section and the marked section before the entry lines; the module docstrings of
-  `tests/test_reports.py` and `tests/test_property_coverage.py`, and group 10 of `tests/test_unit_manifest.py`; rule 4
-  of `src/entry_coverage.py`, rule 6 of `src/unit_manifest.py`, and the report docstring in
-  `src/panorama_to_terraform.py` that states the section order.
-- Gate, measured 2026-11-26 single-threaded on the tree that holds this work, in one process: `ruff check .` clean at
+- Placement, and the reason. The fact's owner is `src/state_coverage.py` rule 7, which states the fact, the reading
+  rule for which entry needs it, the finding set and the line shape, and states no reader, no path rule, no row shape,
+  no unit rule, no severity rule, no value of the pair and no name list of its own. The module names the value once:
+  `STATE_SERIAL_KEY` is the field `LOCATION_SCHEMA` declares and `STATE_SERIAL_FACT` is the §2.2 fact that field fills
+  through `STATE_SCOPE_KEYS`, so the pair is the mapping rule the module already states rather than a name list,
+  `STATE_SCOPE_KEYS["ngfw"]` is written through `STATE_SERIAL_FACT`, `serial_of` answers the value or the empty answer,
+  and `entry_needs_serial` answers from the location the document holds for the entry through `LOCATION_SCHEMA`, so a
+  `shared` entry needs none and a sub-block the row declares for another fact needs none. The serial is read inside
+  `location`, which `STATE_IDENTITY_KEYS` already keeps out of the property set, so no drift line can compare it and
+  `STATE_IDENTITY_KEYS` gains no key; `unit_manifest.FACT_KEYS` already holds the fact, so it gains no key. The shape
+  table already states `ngfw_device` as a variable, so `VALUE_VARIABLES` gains no row, `decode_id` gains no field
+  because the value rides inside the location object the id already declares, and `sanity_checks.location_agrees` is
+  the one comparison the location rule already uses, so it gained no branch. No new source kind and no new
+  `input_shapes.SHAPE_TABLE` row: the document reaches the run through the door the state read already uses. The
+  report prints the finding in its own section after the drift section and before the unit section, grouped by the F3.9
+  rule, and `generate_conversion_report` gained the `state_source` keyword so the section reads entries through
+  `state_coverage` instead of through the ownership rows; `marked` is read once before the state sections. The fact
+  names an operator action, so it is WARN, the exit code stays with the rules that read the files, and the console
+  keeps the five kinds §3.2 states, so the console-shape pin is unchanged.
+
+- The pins: 10 added and one extended. `tests/test_state_coverage.py` group 9 gained
+  `test_the_serial_is_read_through_the_entry_shape_and_the_one_name`,
+  `test_the_block_and_the_id_state_the_same_fact_through_the_shape_table`,
+  `test_a_run_that_reads_no_state_document_declares_no_serial_and_writes_the_bytes_it_writes_today`,
+  `test_a_bound_unit_with_an_entry_that_needs_a_serial_and_has_none_reports_one_line`,
+  `test_the_serial_finding_does_not_move_the_exit_code_and_prints_no_console_line`,
+  `test_the_serial_fact_adds_no_source_kind_and_no_input_shape_row`, and
+  `test_the_serial_fact_names_no_second_identity_key_and_no_new_fact_key`. `tests/test_reports.py` gained
+  `test_the_serial_section_prints_only_when_a_run_read_a_state_document_and_marked_a_unit` and
+  `test_the_serial_section_is_byte_identical_between_runs`; the order pin
+  `test_the_unit_section_prints_after_the_sections_the_report_rule_already_orders` reads the new heading through its
+  owner. `tests/test_variables.py` gained
+  `test_the_declaration_set_holds_the_serial_name_only_for_a_run_that_read_a_value_for_it`. `tests/conftest.py` holds
+  the shared content as `serial_content` and the three runs on it as `serial_run`, because three modules read the same
+  pair content: the run that reads no state document, the run that reads one and declares no pair, and the run that
+  reads one and declares the pair the first run's rows show. The console-shape pin and the corpus finding pins are
+  unchanged, so no pin was moved.
+
+- Measurements, 2026-11-27. On the committed state document, 15 entries, 3 sit in a sub-block that declares the field:
+  `panos_address.web_range_33333333` names `firewall-2` inside `Production-DG`/`Vsys2`, `panos_aggregate_interface.loopback_a1a1a1a1`
+  names `firewall-3` inside `ngfw`, and `panos_address.placeholder_device_99999999` names the placeholder, which F3.5
+  keeps out of the fact, so it reads no value. On the entry that names the value, printed through the print site the
+  table governs: the block prints `var.firewall_2`, `site_data.record_pair` records the pair, `decode_id` reads the
+  value back inside the location the entry sits in, and the gate answers nothing for the pair; the same fact printed as
+  a literal is a finding through the same rule. Because the committed corpus holds no entry that needs the fact inside
+  a unit a declaration can mark, the finding pins write their own content: the export places `Web-Range` inside
+  `Vsys1` in `Production-DG`, the state document holds the same entry with no value for the field, and the declared
+  run prints one section with one line inside `DEVICE GROUP: Production-DG`. The run that reads the same document and
+  declares no pair prints no serial section, and with the section taken out the declared report reads byte for byte as
+  that report, so the state read and the grouping rule write the same bytes as before the piece; two runs on the same
+  arguments and the same content write byte-identical layouts. On the declaration half, `multi_device_templates.xml`
+  recorded a value for the fact at the print site for two units, so the set holds the name the naming rule derives
+  from each value and the block consumes it, while none of the three pair runs records the serial name, because the
+  reference read reaches the ownership half only and prints nothing, and no unit's `site.auto.tfvars` holds it.
+
+- Documents that moved in the same commit: `docs/IMPORT_BINDING.md` §2 decision 6 as taken with the date and the four
+  answers, §1 fact 3, and §4 for the live half; `docs/ARCHITECTURE.md` §3.2 for the third fact kind, its line shape,
+  its printing condition and its pins, and §4.8 for the value that reaches an id through the table;
+  `docs/CODEBASE_ASSEMBLY.md` §9 rule 8 and its pin list; `backlog.md` Epic 14 open fact 1, which now holds only the
+  half a live target states. `docs/ARCHITECTURE.md` §3.3 is unchanged, because the document reaches the run through
+  the door the state read already uses. The module docstrings of `tests/test_reports.py` and `tests/test_variables.py`
+  and the group list of `tests/test_state_coverage.py` moved with the pins.
+
+- Gate, measured 2026-11-27 single-threaded on the tree that holds this work, in one process: `ruff check .` clean at
   `py310` with the 120-character line length, `ruff format --check .` clean on the same 113 files,
   `python3 tools/check_documents.py` reports no finding, and `python3 -m pytest -p no:cacheprovider` with no parallel
-  plugin exits 0 with 1,887 passed and the same 4 `tflint` skips, so 1,891 pins in 55 test modules, in 405.78 s. Run
-  times on this machine move between runs, so each figure here is one measurement. The
-  pin count moved from 1,878 to 1,891: six in `tests/test_property_coverage.py` (33 to 39), six in
-  `tests/test_reports.py` (27 to 33), and one in `tests/test_unit_manifest.py` (51 to 52);
-  `tests/test_container_coverage.py` stayed at 29, because its console-shape pin is unchanged. The test module count
-  stayed 55 and the format file count stayed 113. `tflint` is absent on this machine, so the four skips are the four
-  `tflint` pins in `tests/test_sanity_gate.py`, and `terraform` is present at 1.16.2, so the provider-schema pins ran.
-  No committed golden byte moves: `tests/golden` holds no data file and only 87 `.tf` files, so no golden byte is read
-  by this piece, and the pins that read the report bytes compare them as they are.
+  plugin exits 0 with 1,897 passed and the same 4 `tflint` skips, so 1,901 pins in 55 test modules, in 434.29 s. Run
+  times on this machine move between runs, so each figure here is one measurement. The pin count moved from 1,891 to
+  1,901: seven in `tests/test_state_coverage.py` (32 to 39), two in `tests/test_reports.py` (33 to 35), and one in
+  `tests/test_variables.py` (8 to 9). The test module count stayed 55 and the format file count stayed 113. `tflint`
+  is absent on this machine, so the four skips are the four `tflint` pins in `tests/test_sanity_gate.py`, and
+  `terraform` is present at 1.16.2, so the provider-schema pins ran. No committed golden byte moves:
+  `tests/golden` holds no data file and only 87 `.tf` files, no fixture is added, and the finding pins read the
+  content `tests/conftest.py` writes, so the prose corpus counts in `tests/test_build_kitchen_sink.py`,
+  `tests/test_api_requests.py`, `tests/test_policy_order.py` and `docs/ARCHITECTURE.md` §5.1 did not move.
+
 - Document review: every name a document claims exists, read through `tools/check_documents.py` check 1 over
-  `README.md`, `docs/`, `src/`, and the tracking files, and the same scan extended to the `::name` claims that follow
-  a full claim. `acceptance.md` holds this piece's criteria, and the one claim it made for a pin that was never written
-  is now stated as the report half this piece landed. The open process-debt items in `backlog.md` are unchanged by this
-  piece apart from the report entry, which now records the landed half and keeps the plan fact open, because a plan
-  needs a device.
+  `README.md`, `docs/`, and the tracking files, which reports no finding. `acceptance.md` holds this piece's criteria,
+  and the six places where measurement contradicted the plan are recorded there as measured: the table already states
+  the row, `decode_id` gained no field, `location_agrees` is the comparison rather than `field_agrees`, the pins are
+  group 9 rather than group 7, `entry_needs_serial` answers from the entry's own location, and the report section is
+  stated in `docs/ARCHITECTURE.md` §3.2, which the report rule owns, rather than in `docs/CODEBASE_ASSEMBLY.md` §10,
+  which owns the commit action.
 
 Files this piece read: `AGENTS.md`, `PLAN.md`, `to-do.md`, `backlog.md`, `agent-status.md`, `acceptance.md`,
-`commit.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/IMPORT_BINDING.md`, `docs/ARCHITECTURE.md` §1, §3.2,
-§4.5, §4.6, §6, `docs/MULTI_RUN_CODEBASE.md` §7, `docs/CODEBASE_ASSEMBLY.md` §7, `tools/check_documents.py`,
-`src/container_coverage.py`, `src/entry_coverage.py`, `src/unit_manifest.py`, `src/panorama_to_terraform.py`,
-`tests/conftest.py`, `tests/test_container_coverage.py`, `tests/test_property_coverage.py`, `tests/test_reports.py`,
-`tests/test_unit_manifest.py`, `tests/fixtures/report_grouping.xml`, `tests/fixtures/pbf_rules.xml`,
-`tests/fixtures/dependency_wiring.xml`, `tests/fixtures/tags.xml`, `tests/fixtures/reference_cycle.xml`.
+`commit.md`, `docs/README.md`, `docs/WRITING_RULES.md`, `docs/IMPORT_BINDING.md`, `docs/ARCHITECTURE.md` §1, §2.2,
+§3.2, §3.3, §4.5, §4.6, §4.8, §5, §6, `docs/CODEBASE_ASSEMBLY.md` §7, §9, `docs/INPUT_SHAPES.md`,
+`tools/check_documents.py`, `src/container_coverage.py`, `src/input_shapes.py`, `src/import_blocks.py`,
+`src/naming.py`, `src/resource_mapping.py`, `src/sanity_checks.py`, `src/site_data.py`, `src/state_coverage.py`,
+`src/state_input.py`, `src/unit_manifest.py`, `src/panorama_to_terraform.py`, `tests/conftest.py`,
+`tests/test_container_coverage.py`, `tests/test_reports.py`, `tests/test_state_coverage.py`,
+`tests/test_variables.py`, `tests/fixtures/state_workspace.json`.
 
-The next piece: Piece 14B.1, the device fact for a bound unit, needs decision 6, which states which declared source
-names the serial. Decisions 5 to 9 are untaken, so the completeness half, the rule types, the read-through order, and
-permanence stay in the record. Phase 14A is complete, so its piece list is removed from `to-do.md`; the plan half of
-the zero-change fact stays in `backlog.md`, because a plan needs a device. The two open process-debt pieces, the gate
-and CI document and the watch list document, are in `to-do.md` and `backlog.md`.
+The next piece: Piece 14B.2, the rule types, is blocked on decision 7 and on the F3.5 rulebase value, and Piece 14B.3
+needs decision 8 and the built-in name table, so both stay open in `to-do.md`. Decisions 5 and 9 are untaken, so the
+completeness half and permanence stay open in Phase 14C. The live-target serial stays in `backlog.md`. The two open
+process-debt pieces, the gate and CI document and the watch list document, are in `to-do.md` and `backlog.md`.
+
 ## Rules to keep when writing documents
 
 The writing rules have an owner document, `docs/WRITING_RULES.md`, named by `docs/README.md` and by the root index.

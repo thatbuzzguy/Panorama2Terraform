@@ -91,15 +91,16 @@ pieces are in `to-do.md`, the criteria are in `acceptance.md`, and the facts tha
 run to state which unit's entries are read through an `import` block and which are added, and that decision has
 to be a record field a later run can read back, because a report is per run.
 
-Decisions 1, 2, 3 and 4 of `docs/IMPORT_BINDING.md` §2 are taken, so the pieces that read them are written; the rest
-are untaken, so no piece can be written from them yet. The phases:
+Decisions 1, 2, 3, 4 and 6 of `docs/IMPORT_BINDING.md` §2 are taken, so the pieces that read them are written or
+landed; the rest are untaken, so no piece can be written from them yet. The phases:
 
 - **14A, the mode as data**: complete on main, 2026-11-26. The two values, the level the mode sits at, the record
   field that holds it, the argument that declares it, and the report section that names the units a run marked and the
   entries inside them the property scan reads as zero change.
-- **14B, the facts an id needs that the tool cannot read offline**: the device serial for a bound unit, the
-  rulebase value and the position a live rulebase holds, the instance half of the import row shape, and the
-  built-in name table.
+- **14B, the facts an id needs that the tool cannot read offline**: the device serial fact for a bound unit landed on
+  2026-11-27, read through a state document as a reference source; the rulebase value and the position a live rulebase
+  holds, the instance half of the import row shape, and the built-in name table stay open, with the live half recorded
+  in `backlog.md`.
 - **14C, the plan side and permanence**: the whole-block fact landed on 2026-11-26, through decision 4 and its report
   section; the completeness half for a bound unit, and whether `imports.tf` is permanent codebase content or a
   first-run file, stay open, with the plan half recorded in `backlog.md` because a plan needs a device.

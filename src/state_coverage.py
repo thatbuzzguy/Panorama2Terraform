@@ -1,6 +1,6 @@
-"""F5.6 state coverage: the ownership fact and the drift fact.
+"""F5.6 state coverage: the ownership fact, the drift fact, and the device fact for a bound unit.
 
-Six rules, stated once here.
+Seven rules, stated once here.
 
 1. The state entry shape. A state entry is one instance object the producer read
    (`state_input.StateEntry`). Its matrix row is the row keyed by its resource type, through
@@ -45,22 +45,50 @@ Six rules, stated once here.
    and
    `tests/test_state_coverage.py::test_the_reference_read_reaches_the_ownership_half_and_no_property_value`.
 
+7. The device serial fact for a bound unit (decision 6 of `docs/IMPORT_BINDING.md` §2, taken 2026-11-26). The fact
+   is the serial the state document declares for an entry, read through rule 2 (the location walk, the sub-block
+   names `LOCATION_SCHEMA` declares), and named once here: `STATE_SERIAL_KEY` is the field the state document
+   declares it with, and `STATE_SERIAL_FACT` is the §2.2 fact that field fills through `STATE_SCOPE_KEYS`, so no
+   second name list and no new fact key appear. `serial_of` answers the value, or the empty answer for an entry
+   that holds none. An entry needs the serial when the location it holds places it in a sub-block that declares the
+   field, which `entry_needs_serial` answers through `LOCATION_SCHEMA`. The serial is read from the location, which
+   `STATE_IDENTITY_KEYS` keeps out of the property set, so no drift line can compare it, and the shape table has
+   no property row for it: `VALUE_VARIABLES` already states the field as a variable, so the block prints the
+   reference and the id states the value through the same row. A run that reads no state document reads no entry,
+   so it declares no serial, and the ids for entries that need one stay the placeholders the report already names
+   for the operator. For a bound unit, an entry that needs the serial and has none is one finding, read through
+   `ownership_key` so no second identity key appears, and the bound answer is read through `unit_manifest.mode_of`;
+   this module states no unit rule, no mode value, no severity rule and no console line. Pinned by
+   `tests/test_state_coverage.py` group 9.
+
 Usage:
-    from state_coverage import state_index, state_findings, ownership_line, drift_line
+    from state_coverage import state_index, state_findings, ownership_line, drift_line, serial_findings, serial_line
     findings = state_findings(ledger, state_source)
     for finding in findings:
         print(ownership_line(finding))
+    for finding in serial_findings(state_source, unit_manifest.marked_units(rows)):
+        print(serial_line(finding))
 """
 
 import json
 
 import container_coverage
 import entry_coverage
+import unit_manifest
 from resource_mapping import LOCATION_SCHEMA
 from state_input import StateEntry, StateSource
 
 OWNERSHIP_HEADING = "Entries Another Workspace Already Owns"
 DRIFT_HEADING = "Owned Entries With a Value The Run Does Not Match"
+SERIAL_HEADING = "Bound Entries That Need a Serial The State Document Names No Value For"
+
+# Decision 6 (`docs/IMPORT_BINDING.md` §2, taken 2026-11-26): the serial, named once here. `STATE_SERIAL_KEY` is the
+# field the state document declares it with, and `STATE_SERIAL_FACT` is the §2.2 fact that field fills through
+# `STATE_SCOPE_KEYS`, so the pair is the one mapping rule this module already states, not a name list. The serial is
+# read from the location, which `STATE_IDENTITY_KEYS` keeps out of the property set, so no drift line can compare
+# it, and `unit_manifest.FACT_KEYS` gains no key: the serial is the value the `vsys_device` fact already holds.
+STATE_SERIAL_KEY = "ngfw_device"
+STATE_SERIAL_FACT = "vsys_device"
 
 OWNERSHIP_RULE = (
     "An entry this run read that another workspace already owns is listed here. The state "
@@ -81,6 +109,16 @@ DRIFT_RULE = (
     "which the F4.1 gate still decides."
 )
 
+SERIAL_RULE = (
+    "A bound entry that needs a serial and has none is listed here, in the unit this run marked. The state document "
+    "names the serial for the entry it holds, and the export states a device as a hostname, so a value that names a "
+    "physical unit reaches the run only from a state document read as a reference source. An entry needs the serial "
+    "when the location the state document holds for it places it in a sub-block that declares the field, and the "
+    "serial is not the entry's content, so no property line compares it. The entry is named by the identity key the "
+    "ownership section reads it with. A finding is an operator action, not a broken output, so it does not change "
+    "the exit code, which the F4.1 gate still decides, and it prints in the report only."
+)
+
 # Which §2.2 fact each `location` sub-block fills. The sub-block names and the field names
 # come from `LOCATION_SCHEMA`, so this is the mapping, not a second naming rule; it is the
 # same shape `entry_coverage.REPORT_SCOPE_KEYS` holds for containers. `shared` names the
@@ -88,12 +126,13 @@ DRIFT_RULE = (
 # declare for the row (`template_stack_vsys`, `template_vsys`) names a scope this converter
 # never emits, so an entry placed there is not keyed. `template_stack` is the fifth fact
 # (F6.10.5), so an entry placed inside a stack is keyed by its stack
-# (`tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names`).
+# (`tests/test_state_coverage.py::test_a_stack_sub_block_keys_the_fact_it_names`). The `ngfw` row fills the serial
+# fact for the field `STATE_SERIAL_KEY` names, the name rule 7 states once.
 STATE_SCOPE_KEYS = {
     "device_group": "device_group",
     "vsys": "vsys",
     "template": "template",
-    "ngfw": "vsys_device",
+    "ngfw": STATE_SERIAL_FACT,
     "template_stack": "template_stack",
     "shared": None,
 }
@@ -167,8 +206,9 @@ def state_facts(entry: StateEntry) -> dict | None:
             elif field == "vsys":
                 facts["vsys"] = name
             # The PAN-OS "this device" placeholder names no firewall (F3.5).
-            elif field == "ngfw_device" and name != container_coverage.PLACEHOLDER_DEVICE:
-                facts["vsys_device"] = name
+            elif field == STATE_SERIAL_KEY and name != container_coverage.PLACEHOLDER_DEVICE:
+                # The serial the state document declares for the entry (rule 7), read through the same walk.
+                facts[STATE_SERIAL_FACT] = name
     return facts
 
 
@@ -295,6 +335,90 @@ def ownership_line(finding: dict) -> str:
         f"{name:<38} ",
         f"{finding['resource']:<32} ",
         f"state source: {finding['state_name']} ({finding['state_address']})",
+    ]
+    return "".join(parts).rstrip()
+
+
+def entry_needs_serial(entry: StateEntry) -> bool:
+    """Rule 7: the entry needs the serial when the location it holds places it in a sub-block that declares the field.
+
+    The sub-block names and the field names are read through `LOCATION_SCHEMA`, and the location is read with the
+    same rule rule 2 uses, so this module holds no name list of its own. A `shared` entry names no device, and a
+    sub-block the row declares for another fact declares no device, so both answer False.
+    """
+    blocks = LOCATION_SCHEMA.get(entry.resource_type)
+    if blocks is None:
+        return False
+    location = nested_block(entry.attributes.get("location"))
+    return any(STATE_SERIAL_KEY in blocks.get(block, ()) for block in location)
+
+
+def serial_of(facts: dict) -> str:
+    """Rule 7: the serial a set of facts holds, or the empty answer for an entry that names none.
+
+    The fact is named once, as `STATE_SERIAL_FACT`, the value `STATE_SCOPE_KEYS` states for `STATE_SERIAL_KEY`, so
+    this reads the value and states no name of its own; the empty answer is the same answer the other scan shapes
+    use for a field that does not apply. `facts` is the answer rule 2 gives for an entry, so the read reaches the
+    serial through the entry shape, and an entry that rule 2 cannot key holds no serial to read.
+    """
+    return (facts or {}).get(STATE_SERIAL_FACT, "")
+
+
+def serial_findings(source: StateSource | None, marked: list) -> list:
+    """Rule 7: the entries that need a serial and name none, inside a unit the run marked, in document order.
+
+    The entries are read through rule 2's index, so the identity each finding carries is `ownership_key` and no
+    second identity key appears. The unit is read through `unit_manifest.facts_of` and `unit_name`, and the bound
+    answer through `unit_manifest.mode_of`, so this module states no unit rule, no row field, and no value of the
+    pair. A run that read no state document read no entry, so it reports nothing, and a run that declared no pair
+    marked no unit, so it reports nothing either. The row carries the fields the ownership line shape reads, plus
+    the unit and the mode, so the report's grouping rule reads the same scope facts the other sections read.
+    """
+    if source is None:
+        return []
+    modes = {unit_manifest.unit_name(unit_manifest.facts_of(row)): unit_manifest.mode_of(row) for row in marked}
+    reported = []
+    for entry in state_index(source).values():
+        facts = state_facts(entry)
+        matrix_row = entry_coverage.MATRIX_BY_RESOURCE.get(entry.resource_type)
+        if not entry_needs_serial(entry) or serial_of(facts):
+            continue
+        unit = unit_manifest.unit_name(unit_manifest.facts_of(facts))
+        if unit not in modes:
+            continue
+        finding = dict(facts)
+        finding.update(
+            {
+                "name": entry.entry_name,
+                "resource": matrix_row["resource"],
+                "state_name": source.name,
+                "state_address": entry.address,
+                "unit": unit,
+                "mode": modes[unit],
+            }
+        )
+        reported.append(finding)
+    return reported
+
+
+def serial_line(finding: dict) -> str:
+    """One serial line: the entry the state document holds, the unit it sits in, the mode the run declared, the fact.
+
+    The entry is named by the two parts `ownership_key` reads, the matrix row and the entry name, so a reader can
+    match a line to the ownership section, and the group header the report prints for it is the F3.9 scope rule.
+    The line names no source line, because a state entry has none (rule 1), and no path, the rule the other report
+    bodies follow (F4.2 rule 6). The unit and the mode are read through `unit_manifest`, so this shape states no
+    unit rule, no field and no value of the pair. The report prints this line only, and the console prints no line
+    for the fact, so no sixth console kind appears.
+    """
+    parts = [
+        f"  {finding['resource']}/{finding['name']:<36} ",
+        f"state source: {finding['state_name']} ({finding['state_address']})",
+        "  unit: ",
+        unit_manifest.unit_name(unit_manifest.facts_of(finding)),
+        "  mode: ",
+        unit_manifest.mode_of(finding),
+        "  needs a serial the state document names no value for",
     ]
     return "".join(parts).rstrip()
 

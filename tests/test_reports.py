@@ -28,6 +28,15 @@ section states no unit rule, no row field and no value of the pair, and the entr
 `entry_coverage.pair_answer`, so one line shape prints both the fact name and the difference. The section prints only
 when the run marked a unit, so a run that declares nothing writes the report bytes it writes today, and it is report
 content that prints no console line, so the console keeps the kinds `docs/ARCHITECTURE.md` §3.2 states.
+
+Epic 14 (`docs/IMPORT_BINDING.md` §2, decision 6, taken 2026-11-26): the report gains the state scan's third
+section, after the drift section and before the unit section, for a bound entry that needs a serial the state
+document names no value for. The heading, the rule paragraph, the line shape and the finding set are read through
+their owner, `state_coverage.py` rule 7, so this module pins the printing condition and the grouping only: the
+section prints when the run read a state document and marked a unit, so a run that read no state document, or read
+one and declared no pair, writes the report bytes it writes today, and the group is the same F3.9 rule. The section
+is report content and prints no console line, so the console keeps the kinds §3.2 states, and the fact names an
+operator action, so the gate still decides the exit code.
 """
 
 import re
@@ -41,6 +50,7 @@ import reference_edges
 import resource_mapping
 import shadow_coverage
 import state_coverage
+import state_input
 import unit_manifest
 from conftest import (
     CODEBASE_FIXTURE,
@@ -48,12 +58,15 @@ from conftest import (
     JOIN_RECORDS,
     MODE_VALUES,
     RUN_FIXTURE,
+    WORKSPACE,
     declaration_args,
     declaration_pairs,
     partial_run,
     record_rows,
+    run_main,
     run_pipeline,
     run_script,
+    serial_run,
     written_bytes,
 )
 
@@ -454,6 +467,7 @@ def test_the_unit_section_prints_after_the_sections_the_report_rule_already_orde
         reference_edges.CYCLE_HEADING,
         state_coverage.OWNERSHIP_HEADING,
         state_coverage.DRIFT_HEADING,
+        state_coverage.SERIAL_HEADING,
         entry_coverage.UNIT_HEADING,
         entry_coverage.MARKED_HEADING,
     ]
@@ -481,6 +495,20 @@ def test_the_unit_section_prints_after_the_sections_the_report_rule_already_orde
         entry_coverage.GAP_HEADING,
         entry_coverage.PROPERTY_HEADING,
         entry_coverage.UNIT_HEADING,
+        entry_coverage.MARKED_HEADING,
+    ], present
+
+    # The serial position, measured on content that prints it: the section sits after the drift section and before
+    # the unit section, so the order rule reads the headings their owners state and gains no position of its own.
+    _source, _plain, _state_only, serial_run_out, _pairs, _document = serial_run(converter_module, tmp_path / "serial")
+    serial_report = (serial_run_out / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    present = [heading for heading in declared if f"--- {heading} ---" in serial_report]
+    positions = [serial_report.index(f"--- {heading} ---") for heading in present]
+    assert positions == sorted(positions), present
+    assert serial_report.index(ENTRY_LINES) > positions[-1]
+    assert present == [
+        entry_coverage.GAP_HEADING,
+        state_coverage.SERIAL_HEADING,
         entry_coverage.MARKED_HEADING,
     ], present
 
@@ -774,3 +802,105 @@ def test_the_report_prints_no_console_line_for_the_marked_section(converter_modu
     for line in lines:
         normalized = " ".join(line.split())
         assert not any(normalized == " ".join(scan_line.split()) for scan_line in block), (line, block)
+
+
+# --- the serial section (Epic 14, decision 6, `docs/IMPORT_BINDING.md` §2, taken 2026-11-26) ---
+
+SERIAL_HEADLINE = f"--- {state_coverage.SERIAL_HEADING} ---"
+
+
+def _serial_section(report: str) -> dict[str, list[str]]:
+    """The serial section as {scope title: lines}, in the order the report prints them.
+
+    The same shape the other report bodies read: the rule paragraph is the report rule's own statement, so the pin
+    reads the body only, and each line is read as its words.
+    """
+    # The serial section is not the last section before the entry lines: the unit section and the marked section
+    # print after it, so the reader stops at the next heading instead of at the entry lines.
+    start = report.index(SERIAL_HEADLINE) + len(SERIAL_HEADLINE)
+    end = report.find("--- ", start)
+    end = report.index(ENTRY_LINES) if end < 0 else end
+    text = report[start:end]
+    groups: dict[str, list[str]] = {}
+    current = None
+    rule_seen = False
+    for line in text.splitlines():
+        if not line:
+            continue
+        if not rule_seen:
+            rule_seen = True
+            continue  # the rule paragraph, which is the report rule's own statement
+        if line.startswith("  "):
+            groups[current].append(_shape(line))
+        else:
+            current = line
+            groups.setdefault(line, [])
+    return groups
+
+
+def test_the_serial_section_prints_only_when_a_run_read_a_state_document_and_marked_a_unit(converter_module, tmp_path):
+    """Rule 7, the printing half: the section needs both halves of the fact, so a run that read no state document, or
+    a run that read one and declared no pair, writes the report bytes it writes today.
+
+    Measured 2026-11-27 on the content `tests/conftest.py::serial_content` writes, because the committed corpus holds
+    no state entry that needs a serial inside a unit a declaration can mark: the run that reads the state document and
+    declares no pair prints no serial section, and the same run with the declaration read through `declaration_pairs`
+    prints one section with one line. With the section taken out, the declared report reads byte for byte as the
+    report of the run that read the same document and declared nothing, so the state read itself and the grouping rule
+    write the same bytes as before the piece.
+    """
+    source, plain, state_only, declared, pairs, document = serial_run(converter_module, tmp_path)
+    plain_report = (plain / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    state_report = (state_only / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    declared_report = (declared / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    assert SERIAL_HEADLINE not in plain_report, plain_report
+    assert SERIAL_HEADLINE not in state_report, state_report
+    assert SERIAL_HEADLINE in declared_report, declared_report
+
+    # The line is the shape its owner states, read through the same rule the section prints it with.
+    section = _serial_section(declared_report)
+    lines = [line for body in section.values() for line in body]
+    assert lines, section
+    findings = state_coverage.serial_findings(
+        state_input.read_state(document, workspace=WORKSPACE),
+        unit_manifest.marked_units(record_rows(declared)[unit_manifest]),
+    )
+    assert lines == [_shape(state_coverage.serial_line(finding)) for finding in findings], (section, findings)
+
+    start = declared_report.index("\n" + SERIAL_HEADLINE)
+    end = declared_report.index("\n" + ENTRY_LINES)
+    assert declared_report[:start] + declared_report[end:] == state_report, declared_report
+
+
+def test_the_serial_section_is_byte_identical_between_runs(converter_module, tmp_path):
+    """Rule 7, the determinism half: two runs on the same arguments and the same bytes write the same report bytes, so
+    the section is not a source of run-to-run difference. `tests/conftest.py::written_bytes` is the whole layout.
+
+    Measured 2026-11-27 on the content `tests/conftest.py::serial_content` writes: two runs that read the same state
+    document and declare the same pair write byte-identical layouts, and both reports hold the serial section.
+    """
+    source, _plain, _state_only, first, pairs, document = serial_run(converter_module, tmp_path)
+    first_report = (first / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    assert SERIAL_HEADLINE in first_report, first_report
+
+    second = tmp_path / "again"
+    assert (
+        run_main(
+            converter_module,
+            [
+                str(source),
+                "--output-dir",
+                str(second),
+                "--state",
+                str(document),
+                "--workspace",
+                WORKSPACE,
+                *declaration_args(pairs),
+            ],
+        )
+        == 0
+    )
+    second_report = (second / entry_coverage.REPORT_FILE).read_text(encoding="utf-8")
+    assert SERIAL_HEADLINE in second_report, second_report
+    assert written_bytes(first) == written_bytes(second), sorted(written_bytes(second))
+    assert _serial_section(first_report) == _serial_section(second_report)
